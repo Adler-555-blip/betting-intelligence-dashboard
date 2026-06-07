@@ -10,6 +10,7 @@ body {
   margin: 0;
   background: #090b10;
   color: #e8edf5;
+  font-feature-settings: "tnum";
 }
 
 a {
@@ -21,6 +22,7 @@ a {
   border: 1px solid #263142;
   background: linear-gradient(180deg, #151b25 0%, #11151d 100%);
   border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
 }
 
 .metric-label {

@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   const odds = Number(body.odds);
   const confidence = Number(body.confidence);
   if (!body.matchId || !body.selectedOutcome || !body.reasoning || Number.isNaN(odds) || Number.isNaN(confidence)) {
-    return NextResponse.json({ error: "Invalid journal entry" }, { status: 400 });
+    return NextResponse.json({ error: "Некорректная запись журнала" }, { status: 400 });
   }
 
   const tags = String(body.tags ?? "")

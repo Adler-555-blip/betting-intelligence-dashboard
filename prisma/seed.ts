@@ -10,8 +10,8 @@ const bookmakers = [
 ];
 
 const teams = {
-  cs2: ["NAVI", "Spirit", "Vitality", "FaZe", "MOUZ", "G2", "Astralis", "Virtus.pro", "Cloud9", "Aurora"],
-  dota2: ["Team Spirit", "BetBoom Team", "Gaimin Gladiators", "Team Falcons", "Liquid", "Tundra", "PARIVISION", "Xtreme Gaming", "Azure Ray", "OG"]
+  cs2: ["Team Spirit", "NAVI", "Vitality", "MOUZ", "FaZe Clan"],
+  dota2: ["Team Spirit", "BetBoom Team", "Tundra", "Gaimin Gladiators", "Team Falcons"]
 };
 
 function hoursFromNow(hours: number) {
@@ -34,7 +34,7 @@ async function main() {
   await prisma.bookmaker.deleteMany();
   await prisma.user.deleteMany();
 
-  const user = await prisma.user.create({ data: { name: "Analyst" } });
+  const user = await prisma.user.create({ data: { name: "Аналитик" } });
   const createdBookmakers = await Promise.all(bookmakers.map((bookmaker) => prisma.bookmaker.create({ data: bookmaker })));
 
   const createdTeams: Record<"cs2" | "dota2", Team[]> = { cs2: [], dota2: [] };
@@ -46,24 +46,24 @@ async function main() {
 
   const tournaments = {
     cs2: await prisma.tournament.create({
-      data: { name: "Thunderpick World Circuit", game: "cs2", startDate: hoursFromNow(-48), endDate: hoursFromNow(72), tier: "A", externalIds: JSON.stringify({ mock: "cs2-circuit" }) }
+      data: { name: "IEM Cologne 2026", game: "cs2", startDate: hoursFromNow(-48), endDate: hoursFromNow(72), tier: "S", externalIds: JSON.stringify({ mock: "iem-cologne-2026" }) }
     }),
     dota2: await prisma.tournament.create({
-      data: { name: "Dota Pro Series", game: "dota2", startDate: hoursFromNow(-24), endDate: hoursFromNow(96), tier: "S", externalIds: JSON.stringify({ mock: "dota-pro-series" }) }
+      data: { name: "DreamLeague Season 27", game: "dota2", startDate: hoursFromNow(-24), endDate: hoursFromNow(96), tier: "S", externalIds: JSON.stringify({ mock: "dreamleague-season-27" }) }
     })
   };
 
   const matchSpecs = [
     ["cs2", 0, 1, 2, "prematch", "BO3", 91],
     ["cs2", 2, 3, 5, "prematch", "BO3", 83],
-    ["cs2", 4, 5, 21, "prematch", "BO1", 68],
-    ["cs2", 6, 7, -1, "live", "BO3", 74],
-    ["cs2", 8, 9, -7, "finished", "BO3", 52],
+    ["cs2", 4, 0, 21, "prematch", "BO1", 68],
+    ["cs2", 1, 3, -1, "live", "BO3", 74],
+    ["cs2", 2, 4, -7, "finished", "BO3", 52],
     ["dota2", 0, 1, 1, "prematch", "BO3", 95],
     ["dota2", 2, 3, 4, "prematch", "BO3", 88],
-    ["dota2", 4, 5, 19, "prematch", "BO5", 76],
-    ["dota2", 6, 7, -2, "live", "BO3", 82],
-    ["dota2", 8, 9, -8, "finished", "BO3", 58]
+    ["dota2", 4, 0, 19, "prematch", "BO5", 76],
+    ["dota2", 1, 2, -2, "live", "BO3", 82],
+    ["dota2", 3, 4, -8, "finished", "BO3", 58]
   ] as const;
 
   const matches = [];
@@ -79,7 +79,7 @@ async function main() {
         format,
         importanceScore,
         externalIds: JSON.stringify({ mock: `${game}-${aIndex}-${bIndex}` }),
-        decisionNotes: status === "live" ? "Watch live economy/map state before committing." : null
+        decisionNotes: status === "live" ? "Матч уже идет: сначала проверить текущую карту, экономику/драфт и скорость движения линии." : null
       }
     }));
   }
@@ -103,8 +103,8 @@ async function main() {
   for (const match of matches.slice(0, 6)) {
     await prisma.signal.createMany({
       data: [
-        { matchId: match.id, type: "LINE_DROP", severity: "medium", title: "Line Drop", explanation: "One side shortened by more than 5% across the last sample window." },
-        { matchId: match.id, type: "BOOKMAKER_SPREAD", severity: "low", title: "Bookmaker Spread", explanation: "Best price differs meaningfully between listed bookmakers." }
+        { matchId: match.id, type: "LINE_DROP", severity: "medium", title: "Падение коэффициента", explanation: "Один из исходов просел более чем на 5% за последние часы. Стоит проверить причину движения." },
+        { matchId: match.id, type: "BOOKMAKER_SPREAD", severity: "low", title: "Разница между букмекерами", explanation: "Лучший коэффициент заметно отличается между букмекерами. Есть смысл сравнить рынок перед решением." }
       ]
     });
   }
@@ -114,13 +114,15 @@ async function main() {
   }
 
   for (const match of matches) {
+    const teamA = await prisma.team.findUniqueOrThrow({ where: { id: match.teamAId } });
+    const teamB = await prisma.team.findUniqueOrThrow({ where: { id: match.teamBId } });
     await prisma.newsItem.create({
       data: {
         matchId: match.id,
         game: match.game,
-        title: `${match.game.toUpperCase()} context update for ${match.id.slice(-5)}`,
+        title: `${teamA.name} против ${teamB.name}: проверка формы и контекста перед матчем`,
         url: "https://example.com/esports-context",
-        source: "Mock News",
+        source: "Демо-лента",
         impactScore: Math.floor(Math.random() * 4) + 1,
         publishedAt: hoursFromNow(-Math.floor(Math.random() * 10))
       }
@@ -129,9 +131,9 @@ async function main() {
 
   await prisma.betJournalEntry.createMany({
     data: [
-      { matchId: matches[0].id, bookmakerId: createdBookmakers[0].id, selectedOutcome: "teamA", odds: 1.82, stake: 100, reasoning: "Market moved early; monitor map veto context.", confidence: 3, result: "pending", tags: JSON.stringify(["prematch", "line-move", "value"]) },
-      { matchId: matches[5].id, bookmakerId: createdBookmakers[2].id, selectedOutcome: "teamB", odds: 2.08, stake: 75, reasoning: "Opponent has patch adaptation concerns.", confidence: 4, result: "won", profitLoss: 81, tags: JSON.stringify(["prematch", "news-based"]) },
-      { matchId: matches[8].id, bookmakerId: createdBookmakers[1].id, selectedOutcome: "teamA", odds: 1.7, stake: 50, reasoning: "Live read was too emotional after game one.", confidence: 2, result: "lost", profitLoss: -50, tags: JSON.stringify(["live", "emotional"]) }
+      { matchId: matches[0].id, bookmakerId: createdBookmakers[0].id, selectedOutcome: "Победа Team Spirit", odds: 1.82, stake: 100, reasoning: "Линия начала двигаться в сторону Team Spirit. Перед решением нужно проверить выбор карт и текущую форму NAVI.", confidence: 3, result: "pending", tags: JSON.stringify(["prematch", "line-move", "value"]) },
+      { matchId: matches[5].id, bookmakerId: createdBookmakers[2].id, selectedOutcome: "Победа BetBoom Team", odds: 2.08, stake: 75, reasoning: "У Team Spirit сильнее общий рейтинг, но рынок дает завышенный коэффициент на BetBoom Team после новостного фона.", confidence: 4, result: "won", profitLoss: 81, tags: JSON.stringify(["prematch", "news-based"]) },
+      { matchId: matches[8].id, bookmakerId: createdBookmakers[1].id, selectedOutcome: "Победа BetBoom Team", odds: 1.7, stake: 50, reasoning: "Решение по ходу матча было принято слишком быстро после первой карты. Отметить как эмоциональный вход.", confidence: 2, result: "lost", profitLoss: -50, tags: JSON.stringify(["live", "emotional"]) }
     ]
   });
 }

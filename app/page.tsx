@@ -11,10 +11,10 @@ export default async function HomePage() {
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-2">
-        <p className="metric-label">CS2 / Dota 2 Market Monitor</p>
-        <h1 className="text-3xl font-semibold">Dashboard / Today</h1>
+        <p className="metric-label">Мониторинг линии CS2 / Dota 2</p>
+        <h1 className="text-3xl font-semibold">Матчи сегодня и завтра</h1>
         <p className="max-w-3xl text-sm text-terminal-muted">
-          Manual analysis workspace for events, odds movement, market signals, and decision tracking.
+          Рабочий экран для ручного анализа: события, коэффициенты, движение линии, рыночные сигналы и журнал решений.
         </p>
       </section>
       <DashboardTable matches={todayTomorrow} />

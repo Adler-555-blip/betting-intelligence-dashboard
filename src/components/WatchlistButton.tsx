@@ -23,10 +23,10 @@ export function WatchlistButton({ matchId, initialActive }: { matchId: string; i
       type="button"
       onClick={toggle}
       disabled={busy || active}
-      title="Add to Watchlist"
+      title="Добавить в список наблюдения"
       className="inline-flex h-9 items-center gap-2 rounded border border-terminal-border px-3 text-sm text-terminal-text hover:border-terminal-green disabled:opacity-60"
     >
-      <Eye size={16} /> {active ? "Watching" : "Watchlist"}
+      <Eye size={16} /> {active ? "В наблюдении" : "Наблюдать"}
     </button>
   );
 }

@@ -1,4 +1,5 @@
 import { getAnalytics } from "@/src/lib/data";
+import { gameLabel, tagLabel } from "@/src/lib/display";
 
 export default async function AnalyticsPage() {
   const entries = await getAnalytics();
@@ -9,30 +10,30 @@ export default async function AnalyticsPage() {
   const winrate = settled.length ? (wins / settled.length) * 100 : 0;
   const roi = stake ? (profit / stake) * 100 : 0;
 
-  const byGame = group(entries, (entry) => entry.match.game);
-  const byBookmaker = group(entries, (entry) => entry.bookmaker?.name ?? "Manual");
+  const byGame = group(entries, (entry) => gameLabel(entry.match.game));
+  const byBookmaker = group(entries, (entry) => entry.bookmaker?.name ?? "Ручной ввод");
   const byTag = new Map<string, number>();
   for (const entry of entries) {
     const tags = parseTags(entry.tags);
-    for (const tag of tags) byTag.set(String(tag), (byTag.get(String(tag)) ?? 0) + 1);
+    for (const tag of tags) byTag.set(tagLabel(String(tag)), (byTag.get(tagLabel(String(tag))) ?? 0) + 1);
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <p className="metric-label">Journal performance</p>
-        <h1 className="text-3xl font-semibold">Analytics</h1>
+        <p className="metric-label">Сводка по журналу решений</p>
+        <h1 className="text-3xl font-semibold">Аналитика</h1>
       </div>
       <section className="grid gap-4 md:grid-cols-4">
-        <Metric label="Entries" value={entries.length.toString()} />
-        <Metric label="Winrate" value={`${winrate.toFixed(1)}%`} />
+        <Metric label="Записей" value={entries.length.toString()} />
+        <Metric label="Доля выигрышей" value={`${winrate.toFixed(1)}%`} />
         <Metric label="ROI" value={`${roi.toFixed(1)}%`} />
-        <Metric label="Profit / Loss" value={profit.toFixed(2)} />
+        <Metric label="Финансовый итог" value={profit.toFixed(2)} />
       </section>
       <section className="grid gap-6 lg:grid-cols-3">
-        <Breakdown title="By Discipline" rows={Array.from(byGame.entries())} />
-        <Breakdown title="By Bookmaker" rows={Array.from(byBookmaker.entries())} />
-        <Breakdown title="By Tags" rows={Array.from(byTag.entries())} />
+        <Breakdown title="По дисциплинам" rows={Array.from(byGame.entries())} />
+        <Breakdown title="По букмекерам" rows={Array.from(byBookmaker.entries())} />
+        <Breakdown title="По тегам" rows={Array.from(byTag.entries())} />
       </section>
     </div>
   );
@@ -52,6 +53,7 @@ function Breakdown({ title, rows }: { title: string; rows: [string, number][] })
     <div className="terminal-card p-5">
       <h2 className="text-xl font-semibold">{title}</h2>
       <div className="mt-4 space-y-3">
+        {rows.length === 0 && <div className="text-sm text-terminal-muted">Данных пока нет.</div>}
         {rows.map(([label, count]) => (
           <div key={label} className="flex justify-between border-b border-terminal-border pb-2 text-sm last:border-0">
             <span>{label}</span>

@@ -3,12 +3,12 @@ import { prisma } from "@/src/lib/prisma";
 
 export async function POST(request: Request) {
   const body = await request.json();
-  if (!body.matchId) return NextResponse.json({ error: "matchId is required" }, { status: 400 });
+  if (!body.matchId) return NextResponse.json({ error: "Не указан матч" }, { status: 400 });
 
   const user =
     (await prisma.user.findFirst()) ??
     (await prisma.user.create({
-      data: { name: "Analyst" }
+      data: { name: "Аналитик" }
     }));
 
   const existing = await prisma.watchlistItem.findFirst({
