@@ -11,3 +11,4 @@ work/runtime
 coverage
 dist
 .DS_Store
+.vercel
