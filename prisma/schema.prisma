@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String?         @unique
+  name           String
+  createdAt      DateTime        @default(now())
+  watchlistItems WatchlistItem[]
+}
+
+model Team {
+  id          String      @id @default(cuid())
+  name        String
+  game        String
+  logoUrl     String?
+  externalIds String?
+  matchesA    Match[]     @relation("TeamA")
+  matchesB    Match[]     @relation("TeamB")
+  newsItems   NewsItem[]
+}
+
+model Tournament {
+  id          String    @id @default(cuid())
+  name        String
+  game        String
+  startDate   DateTime
+  endDate     DateTime?
+  tier        String?
+  externalIds String?
+  matches     Match[]
+}
+
+model Match {
+  id             String            @id @default(cuid())
+  game           String
+  teamAId        String
+  teamBId        String
+  tournamentId   String
+  startTime      DateTime
+  status         String
+  format         String
+  importanceScore Int
+  externalIds    String?
+  decisionNotes  String?
+  teamA          Team              @relation("TeamA", fields: [teamAId], references: [id])
+  teamB          Team              @relation("TeamB", fields: [teamBId], references: [id])
+  tournament     Tournament        @relation(fields: [tournamentId], references: [id])
+  oddsSnapshots  OddsSnapshot[]
+  signals        Signal[]
+  watchlistItems WatchlistItem[]
+  journalEntries BetJournalEntry[]
+  newsItems      NewsItem[]
+}
+
+model Bookmaker {
+  id             String            @id @default(cuid())
+  name           String
+  slug           String            @unique
+  oddsSnapshots  OddsSnapshot[]
+  journalEntries BetJournalEntry[]
+}
+
+model OddsSnapshot {
+  id          String    @id @default(cuid())
+  matchId     String
+  bookmakerId String
+  market      String
+  selection   String
+  odds        Float
+  timestamp   DateTime
+  match       Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  bookmaker   Bookmaker @relation(fields: [bookmakerId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, timestamp])
+  @@index([bookmakerId, timestamp])
+}
+
+model Signal {
+  id          String         @id @default(cuid())
+  matchId     String
+  type        String
+  severity    String
+  title       String
+  explanation String
+  createdAt   DateTime       @default(now())
+  match       Match          @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  userId    String?
+  matchId   String
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, matchId])
+}
+
+model BetJournalEntry {
+  id              String        @id @default(cuid())
+  matchId         String
+  bookmakerId     String?
+  selectedOutcome String
+  odds            Float
+  stake           Float?
+  reasoning       String
+  confidence      Int
+  result          String        @default("pending")
+  profitLoss      Float?
+  tags            String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  match           Match         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  bookmaker       Bookmaker?    @relation(fields: [bookmakerId], references: [id], onDelete: SetNull)
+}
+
+model NewsItem {
+  id          String   @id @default(cuid())
+  matchId     String?
+  teamId      String?
+  game        String
+  title       String
+  url         String
+  source      String
+  impactScore Int?
+  publishedAt DateTime
+  match       Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team        Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+}
