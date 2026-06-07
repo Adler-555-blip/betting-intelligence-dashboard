@@ -4,10 +4,11 @@ import { ru } from "date-fns/locale";
 import { getJournalData, getMatch } from "@/src/lib/data";
 import { chartSeries, latestOddsRows } from "@/src/lib/odds";
 import { gameLabel, severityLabel, signalTypeLabel } from "@/src/lib/display";
-import { getMatchIntelligence, type DataBadge, type TeamFormFactor } from "@/src/lib/matchIntelligence";
+import { getMatchIntelligence, type DataBadge, type MapFactor, type PlayerKillFactor, type TeamFormFactor, type TeamRatingFactor } from "@/src/lib/matchIntelligence";
 import { OddsChart } from "@/src/components/OddsChart";
 import { StatusPill } from "@/src/components/StatusPill";
 import { JournalForm } from "@/src/components/JournalForm";
+import { BlockUsefulnessFeedback } from "@/src/components/BlockUsefulnessFeedback";
 
 export default async function MatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -74,6 +75,13 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         </div>
       </section>
 
+      {match.game === "cs2" && (
+        <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <TeamRatingSection ratings={intelligence.teamRatings} />
+          <PlayerKillsSection players={intelligence.playerKills} />
+        </section>
+      )}
+
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="terminal-card p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -108,19 +116,23 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         <section className="terminal-card overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-terminal-border p-5">
             <div>
-              <h2 className="text-xl font-semibold">Карты</h2>
-              <p className="mt-1 text-sm text-terminal-muted">Демо-статистика карт до подключения надежного CS2-источника.</p>
+              <h2 className="text-xl font-semibold">Карты и стороны</h2>
+              <p className="mt-1 text-sm text-terminal-muted">Winrate по картам, CT/T round winrate и профиль карты для оценки map pool.</p>
             </div>
             <DataBadgeView value="demo" label="Демо-статистика карт" />
           </div>
-          <table className="w-full min-w-[880px] text-left text-sm">
+          <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="text-xs uppercase text-terminal-muted">
               <tr>
                 <th className="px-4 py-3">Карта</th>
                 <th className="px-4 py-3">{match.teamA.name}: сыграно</th>
                 <th className="px-4 py-3">{match.teamA.name}: winrate</th>
+                <th className="px-4 py-3">{match.teamA.name}: CT/T</th>
                 <th className="px-4 py-3">{match.teamB.name}: сыграно</th>
                 <th className="px-4 py-3">{match.teamB.name}: winrate</th>
+                <th className="px-4 py-3">{match.teamB.name}: CT/T</th>
+                <th className="px-4 py-3">Сильнее сторона</th>
+                <th className="px-4 py-3">Профиль</th>
                 <th className="px-4 py-3">Преимущество</th>
               </tr>
             </thead>
@@ -130,8 +142,12 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
                   <td className="px-4 py-3 font-medium">{item.map}</td>
                   <td className="px-4 py-3">{item.teamAPlayed}</td>
                   <td className="px-4 py-3">{item.teamAWinrate}%</td>
+                  <td className="px-4 py-3">{item.teamACTWinrate}% / {item.teamATWinrate}%</td>
                   <td className="px-4 py-3">{item.teamBPlayed}</td>
                   <td className="px-4 py-3">{item.teamBWinrate}%</td>
+                  <td className="px-4 py-3">{item.teamBCTWinrate}% / {item.teamBTWinrate}%</td>
+                  <td className="px-4 py-3">{item.strongerSide}</td>
+                  <td className="px-4 py-3"><MapSideBadge map={item} /></td>
                   <td className="px-4 py-3 text-terminal-muted">{mapAdvantageLabel(item.advantage, match.teamA.name, match.teamB.name)}</td>
                 </tr>
               ))}
@@ -241,7 +257,103 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         <h2 className="text-xl font-semibold">Добавить решение в журнал</h2>
         <JournalForm matches={matchOptions} bookmakers={journalData.bookmakers} defaultMatchId={match.id} />
       </section>
+
+      <BlockUsefulnessFeedback matchId={match.id} />
+
+      <section className="terminal-card p-5">
+        <h2 className="text-xl font-semibold">Что спросить у беттора</h2>
+        <div className="mt-4 grid gap-3 text-sm text-terminal-muted md:grid-cols-2">
+          {[
+            "Какие 3 блока ты смотришь в первую очередь?",
+            "Какие блоки можно убрать?",
+            "Каких данных не хватает для ставки?",
+            "Важны ли тебе CT/T раунды?",
+            "Важны ли средние киллы игрока?",
+            "Важен ли рейтинг команды?",
+            "Какие данные ты обычно ищешь вручную?",
+            "Что должно быть выше на странице?"
+          ].map((question) => (
+            <div key={question} className="rounded border border-terminal-border bg-terminal-bg p-3">□ {question}</div>
+          ))}
+        </div>
+      </section>
     </div>
+  );
+}
+
+function TeamRatingSection({ ratings }: { ratings: TeamRatingFactor[] }) {
+  return (
+    <section className="terminal-card p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Рейтинг команд</h2>
+          <p className="mt-1 text-sm text-terminal-muted">HLTV Rating-подобный демо-рейтинг для сравнения силы команд.</p>
+        </div>
+        <DataBadgeView value="demo" />
+      </div>
+      <div className="space-y-3">
+        {ratings.map((rating) => (
+          <div key={rating.teamName} className="rounded border border-terminal-border bg-terminal-bg p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold">{rating.teamName}</h3>
+              <span className="text-2xl font-semibold text-terminal-green">{rating.rating.toFixed(2)}</span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <MetricInline label="Текущий рейтинг" value={rating.rating.toFixed(2)} />
+              <MetricInline label="Место" value={`#${rating.rank}`} />
+              <MetricInline label="Разница" value={`${rating.ratingDiff > 0 ? "+" : ""}${rating.ratingDiff.toFixed(2)}`} />
+              <MetricInline label="Динамика" value={rating.trend} />
+              <MetricInline label="Источник" value={rating.source} />
+              <DataBadgeView value={rating.badge} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PlayerKillsSection({ players }: { players: PlayerKillFactor[] }) {
+  return (
+    <section className="terminal-card overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-terminal-border p-5">
+        <div>
+          <h2 className="text-xl font-semibold">Киллы игроков</h2>
+          <p className="mt-1 text-sm text-terminal-muted">Блок для первичной оценки индивидуальных рынков по количеству киллов.</p>
+        </div>
+        <DataBadgeView value="demo" label="Демо-данные игроков" />
+      </div>
+      <table className="w-full min-w-[1040px] text-left text-sm">
+        <thead className="text-xs uppercase text-terminal-muted">
+          <tr>
+            <th className="px-4 py-3">Команда</th>
+            <th className="px-4 py-3">Игрок</th>
+            <th className="px-4 py-3">Киллы 5 карт</th>
+            <th className="px-4 py-3">Киллы 10 карт</th>
+            <th className="px-4 py-3">K/D</th>
+            <th className="px-4 py-3">ADR</th>
+            <th className="px-4 py-3">Стабильность</th>
+            <th className="px-4 py-3">Лучшие карты</th>
+            <th className="px-4 py-3">Слабые карты</th>
+          </tr>
+        </thead>
+        <tbody>
+          {players.map((player) => (
+            <tr key={`${player.teamName}-${player.nickname}`} className="border-t border-terminal-border">
+              <td className="px-4 py-3">{player.teamName}</td>
+              <td className="px-4 py-3 font-medium">{player.nickname}</td>
+              <td className="px-4 py-3">{player.avgKillsLast5}</td>
+              <td className="px-4 py-3">{player.avgKillsLast10}</td>
+              <td className="px-4 py-3">{player.kd.toFixed(2)}</td>
+              <td className="px-4 py-3">{player.adr.toFixed(1)}</td>
+              <td className="px-4 py-3">{player.stability}</td>
+              <td className="px-4 py-3">{player.bestMaps.join(", ")}</td>
+              <td className="px-4 py-3">{player.weakMaps.join(", ")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 
@@ -368,4 +480,14 @@ function mapAdvantageLabel(value: "teamA" | "teamB" | "even", teamA: string, tea
   if (value === "teamA") return teamA;
   if (value === "teamB") return teamB;
   return "Ровно";
+}
+
+function MapSideBadge({ map }: { map: MapFactor }) {
+  const className =
+    map.sideProfile === "Balanced"
+      ? "border-white/15 bg-white/5 text-terminal-muted"
+      : map.sideProfile === "CT-sided"
+        ? "border-terminal-green/40 bg-terminal-green/10 text-terminal-green"
+        : "border-terminal-yellow/40 bg-terminal-yellow/10 text-terminal-yellow";
+  return <span className={`inline-flex rounded border px-2 py-1 text-xs font-medium ${className}`}>{map.sideProfile}</span>;
 }

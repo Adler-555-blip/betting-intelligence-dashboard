@@ -25,9 +25,39 @@ export type MapFactor = {
   map: string;
   teamAPlayed: number;
   teamAWinrate: number;
+  teamACTWinrate: number;
+  teamATWinrate: number;
   teamBPlayed: number;
   teamBWinrate: number;
+  teamBCTWinrate: number;
+  teamBTWinrate: number;
+  strongerSide: "CT" | "T" | "Balanced";
+  sideProfile: "CT-sided" | "T-sided" | "Balanced";
   advantage: "teamA" | "teamB" | "even";
+  source: string;
+  badge: DataBadge;
+};
+
+export type TeamRatingFactor = {
+  teamName: string;
+  rating: number;
+  rank: number;
+  ratingDiff: number;
+  trend: string;
+  source: string;
+  badge: DataBadge;
+};
+
+export type PlayerKillFactor = {
+  teamName: string;
+  nickname: string;
+  avgKillsLast5: number;
+  avgKillsLast10: number;
+  kd: number;
+  adr: number;
+  stability: string;
+  bestMaps: string[];
+  weakMaps: string[];
   source: string;
   badge: DataBadge;
 };
@@ -54,6 +84,8 @@ export type MatchIntelligence = {
   teamBRoster: PlayerInfo[];
   rosterBadge: DataBadge;
   maps: MapFactor[];
+  teamRatings: TeamRatingFactor[];
+  playerKills: PlayerKillFactor[];
   h2h: H2HFactor[];
   patchContext?: {
     patch: string;
@@ -159,12 +191,14 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
   const teamA = teamAReal ?? fallbackForm(match.teamA.name, match.importanceScore, "A", "Демо-данные");
   const teamB = teamBReal ?? fallbackForm(match.teamB.name, match.importanceScore, "B", "Демо-данные");
   const maps = match.game === "cs2" ? fallbackMaps(match.teamA.name, match.teamB.name) : [];
+  const teamRatings = match.game === "cs2" ? fallbackTeamRatings(match.teamA.name, match.teamB.name) : [];
   const h2h = fallbackH2H(match.teamA.name, match.teamB.name, match.game);
   const teamARoster = rosterFallback[match.teamA.name] ?? [];
   const teamBRoster = rosterFallback[match.teamB.name] ?? [];
+  const playerKills = match.game === "cs2" ? fallbackPlayerKills(match.teamA.name, teamARoster).concat(fallbackPlayerKills(match.teamB.name, teamBRoster)) : [];
   const factorsFor = buildPositiveFactors(teamA, teamB, maps, h2h, match.teamA.name, match.teamB.name);
   const factorsAgainst = buildNegativeFactors(teamA, teamB, maps, h2h, teamARoster, teamBRoster, match.teamA.name, match.teamB.name);
-  const score = buildScore(match, teamA, teamB, maps, h2h, teamARoster, teamBRoster);
+  const score = buildScore(match, teamA, teamB, maps, h2h, teamARoster, teamBRoster, teamRatings, playerKills);
 
   return {
     teamA,
@@ -173,6 +207,8 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
     teamBRoster,
     rosterBadge: "demo",
     maps,
+    teamRatings,
+    playerKills,
     h2h,
     patchContext:
       match.game === "dota2"
@@ -192,6 +228,9 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
         teamB.badge === "demo" ? `Форма ${teamB.teamName}` : "",
         "Составы",
         match.game === "cs2" ? "Статистика карт" : "Контекст патча",
+        match.game === "cs2" ? "Рейтинг команд" : "",
+        match.game === "cs2" ? "Киллы игроков" : "",
+        match.game === "cs2" ? "CT/T стороны" : "",
         "Очные встречи"
       ].filter(Boolean),
       insufficient: teamARoster.length && teamBRoster.length ? [] : ["Недостаточно данных по составу одной из команд"]
@@ -231,14 +270,78 @@ function fallbackMaps(teamA: string, teamB: string): MapFactor[] {
   return cs2Maps.map((map, index) => {
     const teamAWinrate = 42 + ((teamA.length * 7 + index * 5) % 37);
     const teamBWinrate = 40 + ((teamB.length * 9 + index * 6) % 39);
+    const teamACTWinrate = 45 + ((teamA.length * 5 + index * 4) % 33);
+    const teamATWinrate = 39 + ((teamA.length * 6 + index * 7) % 35);
+    const teamBCTWinrate = 43 + ((teamB.length * 4 + index * 5) % 35);
+    const teamBTWinrate = 41 + ((teamB.length * 8 + index * 3) % 33);
+    const avgCt = (teamACTWinrate + teamBCTWinrate) / 2;
+    const avgT = (teamATWinrate + teamBTWinrate) / 2;
     return {
       map,
       teamAPlayed: 8 + ((teamA.length + index) % 12),
       teamAWinrate,
+      teamACTWinrate,
+      teamATWinrate,
       teamBPlayed: 7 + ((teamB.length + index * 2) % 12),
       teamBWinrate,
+      teamBCTWinrate,
+      teamBTWinrate,
+      strongerSide: Math.abs(avgCt - avgT) < 4 ? "Balanced" : avgCt > avgT ? "CT" : "T",
+      sideProfile: Math.abs(avgCt - avgT) < 4 ? "Balanced" : avgCt > avgT ? "CT-sided" : "T-sided",
       advantage: Math.abs(teamAWinrate - teamBWinrate) < 5 ? "even" : teamAWinrate > teamBWinrate ? "teamA" : "teamB",
       source: "Демо-статистика карт",
+      badge: "demo"
+    };
+  });
+}
+
+function fallbackTeamRatings(teamA: string, teamB: string): TeamRatingFactor[] {
+  const ratingA = ratingSeed(teamA);
+  const ratingB = ratingSeed(teamB);
+  return [
+    {
+      teamName: teamA,
+      rating: ratingA,
+      rank: Math.max(1, Math.round(24 - ratingA * 9)),
+      ratingDiff: Number((ratingA - ratingB).toFixed(2)),
+      trend: ratingA >= ratingB ? "рост относительно соперника" : "ниже соперника",
+      source: "Демо-рейтинг команд",
+      badge: "demo"
+    },
+    {
+      teamName: teamB,
+      rating: ratingB,
+      rank: Math.max(1, Math.round(24 - ratingB * 9)),
+      ratingDiff: Number((ratingB - ratingA).toFixed(2)),
+      trend: ratingB >= ratingA ? "рост относительно соперника" : "ниже соперника",
+      source: "Демо-рейтинг команд",
+      badge: "demo"
+    }
+  ];
+}
+
+function ratingSeed(teamName: string) {
+  const seed = teamName.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return Number((1.02 + (seed % 42) / 100).toFixed(2));
+}
+
+function fallbackPlayerKills(teamName: string, roster: PlayerInfo[]): PlayerKillFactor[] {
+  return roster.map((player, index) => {
+    const seed = player.nickname.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) + teamName.length + index;
+    const bestMap = cs2Maps[seed % cs2Maps.length];
+    const secondBest = cs2Maps[(seed + 2) % cs2Maps.length];
+    const weakMap = cs2Maps[(seed + 4) % cs2Maps.length];
+    return {
+      teamName,
+      nickname: player.nickname,
+      avgKillsLast5: Number((14 + (seed % 11) + index * 0.4).toFixed(1)),
+      avgKillsLast10: Number((13 + (seed % 10) + index * 0.3).toFixed(1)),
+      kd: Number((0.92 + (seed % 35) / 100).toFixed(2)),
+      adr: Number((64 + (seed % 28) + index * 1.6).toFixed(1)),
+      stability: seed % 3 === 0 ? "высокая" : seed % 3 === 1 ? "средняя" : "низкая",
+      bestMaps: [bestMap, secondBest],
+      weakMaps: [weakMap],
+      source: "Демо-статистика игроков",
       badge: "demo"
     };
   });
@@ -292,24 +395,41 @@ function buildNegativeFactors(teamA: TeamFormFactor, teamB: TeamFormFactor, maps
   return factors.length ? factors : ["Критичных негативных факторов в доступных данных не найдено."];
 }
 
-function buildScore(match: MatchWithTeams, teamA: TeamFormFactor, teamB: TeamFormFactor, maps: MapFactor[], h2h: H2HFactor[], rosterA: PlayerInfo[], rosterB: PlayerInfo[]) {
-  const formA = ((teamA.winrate ?? 50) / 100) * 30;
-  const formB = ((teamB.winrate ?? 50) / 100) * 30;
-  const h2hA = h2h.length ? (h2h.filter((item) => item.winner === match.teamA.name).length / h2h.length) * 20 : 10;
-  const h2hB = h2h.length ? (h2h.filter((item) => item.winner === match.teamB.name).length / h2h.length) * 20 : 10;
-  const mapA = maps.length ? (maps.filter((item) => item.advantage === "teamA").length / maps.length) * 20 : 10;
-  const mapB = maps.length ? (maps.filter((item) => item.advantage === "teamB").length / maps.length) * 20 : 10;
-  const rosterScoreA = rosterA.length >= 5 ? 15 : 7;
-  const rosterScoreB = rosterB.length >= 5 ? 15 : 7;
+function buildScore(match: MatchWithTeams, teamA: TeamFormFactor, teamB: TeamFormFactor, maps: MapFactor[], h2h: H2HFactor[], rosterA: PlayerInfo[], rosterB: PlayerInfo[], ratings: TeamRatingFactor[], playerKills: PlayerKillFactor[]) {
   const line = lineScore(match.oddsSnapshots);
+  const h2hA = h2h.length ? h2h.filter((item) => item.winner === match.teamA.name).length / h2h.length : 0.5;
+  const h2hB = h2h.length ? h2h.filter((item) => item.winner === match.teamB.name).length / h2h.length : 0.5;
+  const mapA = maps.length ? maps.filter((item) => item.advantage === "teamA").length / maps.length : 0.5;
+  const mapB = maps.length ? maps.filter((item) => item.advantage === "teamB").length / maps.length : 0.5;
+  const ctA = maps.length ? maps.filter((item) => item.teamACTWinrate > item.teamBCTWinrate || item.teamATWinrate > item.teamBTWinrate).length / maps.length : 0.5;
+  const ctB = maps.length ? maps.filter((item) => item.teamBCTWinrate > item.teamACTWinrate || item.teamBTWinrate > item.teamATWinrate).length / maps.length : 0.5;
+  const ratingA = ratings[0]?.rating ?? 1.1;
+  const ratingB = ratings[1]?.rating ?? 1.1;
+  const ratingTotal = ratingA + ratingB;
+  const killsA = playerKillScore(playerKills.filter((item) => item.teamName === match.teamA.name));
+  const killsB = playerKillScore(playerKills.filter((item) => item.teamName === match.teamB.name));
+  const killsTotal = killsA + killsB || 1;
+  const rosterScoreA = rosterA.length >= 5 ? 8 : 4;
+  const rosterScoreB = rosterB.length >= 5 ? 8 : 4;
 
-  const breakdown = [
-    { label: "Форма", teamA: Math.round(formA), teamB: Math.round(formB), note: "Вес 30%" },
-    { label: "Очные встречи", teamA: Math.round(h2hA), teamB: Math.round(h2hB), note: "Вес 20%" },
-    { label: match.game === "cs2" ? "Карты" : "Дисциплинный фактор", teamA: Math.round(mapA), teamB: Math.round(mapB), note: "Вес 20%" },
-    { label: "Состав", teamA: rosterScoreA, teamB: rosterScoreB, note: "Вес 15%" },
-    { label: "Линия", teamA: line.teamA, teamB: line.teamB, note: "Вес 15%" }
-  ];
+  const breakdown =
+    match.game === "cs2"
+      ? [
+          { label: "Форма команды", teamA: Math.round(((teamA.winrate ?? 50) / 100) * 18), teamB: Math.round(((teamB.winrate ?? 50) / 100) * 18), note: "Вес 18%" },
+          { label: "Рейтинг команды", teamA: Math.round((ratingA / ratingTotal) * 14), teamB: Math.round((ratingB / ratingTotal) * 14), note: "Вес 14%" },
+          { label: "Map pool", teamA: Math.round(mapA * 16), teamB: Math.round(mapB * 16), note: "Вес 16%" },
+          { label: "CT/T преимущество", teamA: Math.round(ctA * 12), teamB: Math.round(ctB * 12), note: "Вес 12%" },
+          { label: "Игроки и киллы", teamA: Math.round((killsA / killsTotal) * 14), teamB: Math.round((killsB / killsTotal) * 14), note: "Вес 14%" },
+          { label: "Очные встречи", teamA: Math.round(h2hA * 12), teamB: Math.round(h2hB * 12), note: "Вес 12%" },
+          { label: "Движение линии", teamA: Math.round(line.teamA * 0.93), teamB: Math.round(line.teamB * 0.93), note: "Вес 14%" }
+        ]
+      : [
+          { label: "Форма", teamA: Math.round(((teamA.winrate ?? 50) / 100) * 30), teamB: Math.round(((teamB.winrate ?? 50) / 100) * 30), note: "Вес 30%" },
+          { label: "Очные встречи", teamA: Math.round(h2hA * 20), teamB: Math.round(h2hB * 20), note: "Вес 20%" },
+          { label: "Дисциплинный фактор", teamA: 10, teamB: 10, note: "Вес 20%" },
+          { label: "Состав", teamA: rosterScoreA + 7, teamB: rosterScoreB + 7, note: "Вес 15%" },
+          { label: "Линия", teamA: line.teamA, teamB: line.teamB, note: "Вес 15%" }
+        ];
   const rawA = breakdown.reduce((sum, item) => sum + item.teamA, 0);
   const rawB = breakdown.reduce((sum, item) => sum + item.teamB, 0);
   const partial = teamA.badge !== "real" || teamB.badge !== "real" || !maps.length;
@@ -321,6 +441,10 @@ function buildScore(match: MatchWithTeams, teamA: TeamFormFactor, teamB: TeamFor
     partial,
     breakdown
   };
+}
+
+function playerKillScore(players: PlayerKillFactor[]) {
+  return players.reduce((sum, player) => sum + player.avgKillsLast10 + player.kd * 8 + player.adr / 10, 0);
 }
 
 function lineScore(snapshots: OddsSnapshot[]) {
