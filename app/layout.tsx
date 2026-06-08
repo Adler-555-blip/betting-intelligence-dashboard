@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Betting Intelligence Dashboard",
-  description: "Аналитический дашборд для матчей CS2 и Dota 2."
+  description: "Аналитический дашборд для матчей CS2, Dota 2 и футбола."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -18,6 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </Link>
             <div className="flex gap-4 text-sm text-terminal-muted">
               <Link href="/" className="hover:text-terminal-text">Сегодня</Link>
+              <Link href="/decision-factors" className="hover:text-terminal-text">Карта факторов</Link>
               <Link href="/journal" className="hover:text-terminal-text">Журнал</Link>
               <Link href="/analytics" className="hover:text-terminal-text">Аналитика</Link>
             </div>
