@@ -11,6 +11,8 @@ type DecisionFactor = {
   status: FactorStatus;
   dataType: DataType;
   source: string;
+  importance?: Usefulness;
+  realDataNeed?: string;
 };
 
 type FactorSection = {
@@ -105,6 +107,18 @@ const sections: FactorSection[] = [
       { name: "BTTS / обе забьют", status: "Нужно добавить", dataType: "Not connected", source: "The Odds API / API-Football" },
       { name: "Движение коэффициентов", status: "Уже есть в продукте", dataType: "Demo", source: "Demo / The Odds API" }
     ]
+  },
+  {
+    title: "Betting Edge Finder",
+    description: "Продуктовый слой, который превращает факторы матча в объяснимые закономерности и силу сигнала.",
+    factors: [
+      { name: "Map Edge", status: "Уже есть в продукте", dataType: "Demo", source: "Demo / HLTV / PandaScore", importance: "Очень важно", realDataNeed: "Да: реальные карты, veto и map pool" },
+      { name: "Player Edge", status: "Уже есть в продукте", dataType: "Demo", source: "Demo / HLTV / OpenDota", importance: "Очень важно", realDataNeed: "Да: реальные игроки, K/D, ADR, props-линии" },
+      { name: "CT/T Edge", status: "Уже есть в продукте", dataType: "Demo", source: "Demo / HLTV", importance: "Полезно", realDataNeed: "Да: реальные CT/T round winrate" },
+      { name: "Tournament Edge", status: "Уже есть в продукте", dataType: "Demo", source: "Demo / FIFA / Liquipedia", importance: "Полезно", realDataNeed: "Частично: стадия, мотивация, формат" },
+      { name: "Line Movement Edge", status: "Уже есть в продукте", dataType: "Demo", source: "Demo / The Odds API", importance: "Очень важно", realDataNeed: "Да: реальные коэффициенты и история линии" },
+      { name: "Odds Comparison Edge", status: "Нужно добавить", dataType: "Not connected", source: "The Odds API / букмекеры", importance: "Очень важно", realDataNeed: "Да: рынки, коэффициенты, implied probability" }
+    ]
   }
 ];
 
@@ -176,13 +190,15 @@ export function DecisionFactorsMap() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] text-left text-sm">
+            <table className="w-full min-w-[1380px] text-left text-sm">
               <thead className="border-b border-terminal-border text-xs uppercase text-terminal-muted">
                 <tr>
                   <th className="px-4 py-3">Фактор</th>
                   <th className="px-4 py-3">Статус</th>
                   <th className="px-4 py-3">Тип данных</th>
                   <th className="px-4 py-3">Источник данных</th>
+                  <th className="px-4 py-3">Важность</th>
+                  <th className="px-4 py-3">Реальные данные</th>
                   <th className="px-4 py-3">Полезность</th>
                 </tr>
               </thead>
@@ -195,6 +211,8 @@ export function DecisionFactorsMap() {
                       <td className="px-4 py-4"><StatusBadge value={factor.status} /></td>
                       <td className="px-4 py-4"><DataTypeBadge value={factor.dataType} /></td>
                       <td className="px-4 py-4 text-terminal-muted">{factor.source}</td>
+                      <td className="px-4 py-4 text-terminal-muted">{factor.importance ?? "Спросить беттора"}</td>
+                      <td className="px-4 py-4 text-terminal-muted">{factor.realDataNeed ?? (factor.dataType === "Not connected" ? "Да" : "Уточнить")}</td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap gap-2">
                           {usefulnessOptions.map((option) => (

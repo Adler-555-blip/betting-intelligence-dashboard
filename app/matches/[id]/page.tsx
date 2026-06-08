@@ -5,11 +5,13 @@ import { getJournalData, getMatch } from "@/src/lib/data";
 import { chartSeries, latestOddsRows } from "@/src/lib/odds";
 import { gameLabel, severityLabel, signalTypeLabel } from "@/src/lib/display";
 import { getMatchIntelligence, type DataBadge, type FootballContext, type MapFactor, type MatchIntelligence, type PlayerKillFactor, type TeamFormFactor, type TeamRatingFactor } from "@/src/lib/matchIntelligence";
+import { findBettingEdges } from "@/src/lib/edgeFinder";
 import { OddsChart } from "@/src/components/OddsChart";
 import { StatusPill } from "@/src/components/StatusPill";
 import { JournalForm } from "@/src/components/JournalForm";
 import { BlockUsefulnessFeedback } from "@/src/components/BlockUsefulnessFeedback";
 import { PreBetSurvey } from "@/src/components/PreBetSurvey";
+import { BettingEdgeFinder } from "@/src/components/BettingEdgeFinder";
 
 export default async function MatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,6 +23,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
   const series = chartSeries(match.oddsSnapshots);
   const matchOptions = journalData.matches.map((item) => ({ id: item.id, label: `${item.teamA.name} против ${item.teamB.name}` }));
   const intelligence = await getMatchIntelligence(match);
+  const edges = findBettingEdges(match, intelligence);
   const summary = buildMatchSummary(match.teamA.name, match.teamB.name, intelligence);
   const leadingTeam = intelligence.score.teamA === intelligence.score.teamB
     ? "Преимущество не выражено"
@@ -55,13 +58,15 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         </div>
       </section>
 
+      <BettingEdgeFinder matchId={match.id} edges={edges} />
+
       <section className="terminal-card border-terminal-green/40 p-5 shadow-[0_18px_60px_rgba(34,197,94,0.08)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="metric-label">Match Intelligence Score</p>
-            <h2 className="mt-1 text-3xl font-semibold">Кто выглядит сильнее, почему и где риски</h2>
+            <p className="metric-label">Подробная статистика</p>
+            <h2 className="mt-1 text-3xl font-semibold">Сила команд и базовые факторы</h2>
             <p className="mt-2 max-w-3xl text-sm text-terminal-muted">
-              Нейтральная сводка без рекомендаций к ставке: форма, рейтинг, турнирный контекст, составы, очные встречи и движение линии.
+              Старый аналитический слой оставлен ниже найденных закономерностей: форма, рейтинг, турнирный контекст, составы, очные встречи и движение линии.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -736,9 +741,9 @@ function buildTeamSummary(
   const risks = intelligence.factorsAgainst.filter((item) => item.includes(teamName)).slice(0, 3);
 
   if (score > opponentScore) {
-    advantages.unshift(`Match Intelligence Score выше: ${score} против ${opponentScore}.`);
+    advantages.unshift(`Базовая оценка факторов выше: ${score} против ${opponentScore}.`);
   } else if (score < opponentScore) {
-    risks.unshift(`Match Intelligence Score ниже: ${score} против ${opponentScore}.`);
+    risks.unshift(`Базовая оценка факторов ниже: ${score} против ${opponentScore}.`);
   }
 
   if (rating && opponentRating && rating.rating > opponentRating.rating) {
