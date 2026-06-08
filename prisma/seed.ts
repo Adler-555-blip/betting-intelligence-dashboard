@@ -1,4 +1,5 @@
 import { PrismaClient, type Team } from "@prisma/client";
+import { cs2FoundationSources, getRealCs2Team, getRealCs2TeamNames, realCs2Matches } from "../src/lib/cs2RealData";
 
 const prisma = new PrismaClient();
 
@@ -10,7 +11,7 @@ const bookmakers = [
 ];
 
 const teams = {
-  cs2: ["Team Spirit", "NAVI", "Vitality", "MOUZ", "FaZe Clan"],
+  cs2: getRealCs2TeamNames(),
   dota2: ["Team Spirit", "BetBoom Team", "Tundra", "Gaimin Gladiators", "Team Falcons"],
   football: ["Mexico", "South Africa", "Canada", "Switzerland", "Brazil", "Scotland", "Morocco", "Haiti", "Germany", "England", "Argentina", "France", "Spain", "Portugal", "Korea Republic", "Czechia"]
 };
@@ -42,13 +43,40 @@ async function main() {
   const createdTeams: Record<"cs2" | "dota2" | "football", Team[]> = { cs2: [], dota2: [], football: [] };
   for (const game of ["cs2", "dota2", "football"] as const) {
     for (const name of teams[game]) {
-      createdTeams[game].push(await prisma.team.create({ data: { name, game, externalIds: JSON.stringify({ mock: name.toLowerCase().replaceAll(" ", "-") }) } }));
+      const realCs2Team = game === "cs2" ? getRealCs2Team(name) : null;
+      createdTeams[game].push(await prisma.team.create({
+        data: {
+          name,
+          game,
+          externalIds: JSON.stringify(realCs2Team ? {
+            source: "HLTV",
+            hltvName: realCs2Team.hltvName,
+            hltvTeamUrl: realCs2Team.sources.team,
+            hltvRankingUrl: realCs2Team.sources.ranking,
+            rank: realCs2Team.rank,
+            points: realCs2Team.points,
+            dataKind: "real-foundation"
+          } : { mock: name.toLowerCase().replaceAll(" ", "-") })
+        }
+      }));
     }
   }
 
   const tournaments = {
     cs2: await prisma.tournament.create({
-      data: { name: "IEM Cologne 2026", game: "cs2", startDate: hoursFromNow(-48), endDate: hoursFromNow(72), tier: "S", externalIds: JSON.stringify({ mock: "iem-cologne-2026" }) }
+      data: {
+        name: "IEM Cologne Major 2026",
+        game: "cs2",
+        startDate: new Date("2026-06-02T00:00:00.000Z"),
+        endDate: new Date("2026-06-21T00:00:00.000Z"),
+        tier: "S",
+        externalIds: JSON.stringify({
+          source: "Liquipedia / HLTV",
+          liquipediaUrl: cs2FoundationSources.event,
+          hltvMatchesUrl: cs2FoundationSources.matches,
+          dataKind: "real-foundation"
+        })
+      }
     }),
     dota2: await prisma.tournament.create({
       data: { name: "DreamLeague Season 27", game: "dota2", startDate: hoursFromNow(-24), endDate: hoursFromNow(96), tier: "S", externalIds: JSON.stringify({ mock: "dreamleague-season-27" }) }
@@ -78,11 +106,6 @@ async function main() {
   };
 
   const matchSpecs = [
-    ["cs2", 0, 1, 2, "prematch", "BO3", 91],
-    ["cs2", 2, 3, 5, "prematch", "BO3", 83],
-    ["cs2", 4, 0, 21, "prematch", "BO1", 68],
-    ["cs2", 1, 3, -1, "live", "BO3", 74],
-    ["cs2", 2, 4, -7, "finished", "BO3", 52],
     ["dota2", 0, 1, 1, "prematch", "BO3", 95],
     ["dota2", 2, 3, 4, "prematch", "BO3", 88],
     ["dota2", 4, 0, 19, "prematch", "BO5", 76],
@@ -100,6 +123,32 @@ async function main() {
   ] as const;
 
   const matches = [];
+
+  for (const spec of realCs2Matches) {
+    const teamA = createdTeams.cs2.find((team) => team.name === spec.teamA);
+    const teamB = createdTeams.cs2.find((team) => team.name === spec.teamB);
+    if (!teamA || !teamB) continue;
+    matches.push(await prisma.match.create({
+      data: {
+        game: "cs2",
+        teamAId: teamA.id,
+        teamBId: teamB.id,
+        tournamentId: tournaments.cs2.id,
+        startTime: hoursFromNow(spec.startOffsetHours),
+        status: spec.status,
+        format: spec.format,
+        importanceScore: spec.importanceScore,
+        externalIds: JSON.stringify({
+          source: spec.source,
+          sourceUrl: spec.sourceUrl,
+          dataKind: "real-foundation",
+          officialContext: spec.officialContext
+        }),
+        decisionNotes: `${spec.officialContext} Карты, коэффициенты и player stats пока остаются demo/fallback.`
+      }
+    }));
+  }
+
   for (const [game, aIndex, bIndex, startOffset, status, format, importanceScore] of matchSpecs) {
     const teamAName = createdTeams[game][aIndex].name;
     const teamBName = createdTeams[game][bIndex].name;

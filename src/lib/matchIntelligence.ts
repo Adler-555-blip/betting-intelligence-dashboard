@@ -1,4 +1,5 @@
 import type { Match, OddsSnapshot, Team } from "@prisma/client";
+import { cs2FoundationSources, getRealCs2Roster, getRealCs2Team } from "./cs2RealData";
 import { getOpenDotaTeamFactors } from "./providers/opendotaProvider";
 
 export type DataBadge = "real" | "demo" | "insufficient";
@@ -240,11 +241,11 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
   const teamA = teamAReal ?? fallbackForm(match.teamA.name, match.importanceScore, "A", "Демо-данные");
   const teamB = teamBReal ?? fallbackForm(match.teamB.name, match.importanceScore, "B", "Демо-данные");
   const maps = match.game === "cs2" ? fallbackMaps(match.teamA.name, match.teamB.name) : [];
-  const teamRatings = match.game === "cs2" ? fallbackTeamRatings(match.teamA.name, match.teamB.name) : [];
+  const teamRatings = match.game === "cs2" ? realCs2TeamRatings(match.teamA.name, match.teamB.name) : [];
   const footballContext = match.game === "football" ? fallbackFootballContext(match) : undefined;
   const h2h = fallbackH2H(match.teamA.name, match.teamB.name, match.game);
-  const teamARoster = rosterFallback[match.teamA.name] ?? [];
-  const teamBRoster = rosterFallback[match.teamB.name] ?? [];
+  const teamARoster = match.game === "cs2" ? getRealCs2Roster(match.teamA.name) : rosterFallback[match.teamA.name] ?? [];
+  const teamBRoster = match.game === "cs2" ? getRealCs2Roster(match.teamB.name) : rosterFallback[match.teamB.name] ?? [];
   const playerKills = match.game === "cs2" ? fallbackPlayerKills(match.teamA.name, teamARoster).concat(fallbackPlayerKills(match.teamB.name, teamBRoster)) : [];
   const factorsFor = match.game === "football" && footballContext
     ? buildFootballPositiveFactors(match.teamA.name, match.teamB.name, footballContext)
@@ -259,7 +260,7 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
     teamB,
     teamARoster,
     teamBRoster,
-    rosterBadge: "demo",
+    rosterBadge: match.game === "cs2" && teamARoster.length >= 5 && teamBRoster.length >= 5 ? "real" : "demo",
     maps,
     teamRatings,
     playerKills,
@@ -280,15 +281,17 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
       real: [
         teamA.badge === "real" ? `Форма ${teamA.teamName}: OpenDota` : "",
         teamB.badge === "real" ? `Форма ${teamB.teamName}: OpenDota` : "",
+        match.game === "cs2" ? `Матчи CS2: HLTV match center (${cs2FoundationSources.matches})` : "",
+        match.game === "cs2" ? `Турнир CS2: IEM Cologne Major 2026 / Liquipedia (${cs2FoundationSources.event})` : "",
+        match.game === "cs2" ? `Рейтинг команд: HLTV Ranking snapshot (${cs2FoundationSources.ranking})` : "",
+        match.game === "cs2" ? "Составы CS2: HLTV team pages, сохранены в real foundation snapshot" : "",
         match.game === "football" && footballContext?.badge === "real" ? "Турнирный контекст FIFA World Cup 2026" : ""
       ].filter(Boolean),
       demo: [
         teamA.badge === "demo" ? `Форма ${teamA.teamName}` : "",
         teamB.badge === "demo" ? `Форма ${teamB.teamName}` : "",
-        "Составы",
         match.game === "cs2" ? "Статистика карт" : "",
         match.game === "dota2" ? "Контекст патча" : "",
-        match.game === "cs2" ? "Рейтинг команд" : "",
         match.game === "cs2" ? "Киллы игроков" : "",
         match.game === "cs2" ? "CT/T стороны" : "",
         match.game === "football" ? "Рейтинг сборных" : "",
@@ -296,7 +299,7 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
         match.game === "football" ? "Коэффициенты 1X2" : "",
         match.game === "football" ? "Календарь и логистика" : "",
         match.game === "football" && footballContext?.badge === "demo" ? "Демо-пара внутри окна FIFA World Cup 2026" : "",
-        "Очные встречи"
+        match.game === "cs2" ? "Очные встречи и veto" : "Очные встречи"
       ].filter(Boolean),
       insufficient: match.game === "football"
         ? ["Нет подтвержденных составов и травм", "Нет реальных новостей по сборным", "Нет реальных market signals"]
@@ -385,6 +388,32 @@ function fallbackTeamRatings(teamA: string, teamB: string): TeamRatingFactor[] {
       badge: "demo"
     }
   ];
+}
+
+function realCs2TeamRatings(teamA: string, teamB: string): TeamRatingFactor[] {
+  const realA = getRealCs2Team(teamA);
+  const realB = getRealCs2Team(teamB);
+  const ratingA = realA?.points ? Number((realA.points / 1000).toFixed(2)) : ratingSeed(teamA);
+  const ratingB = realB?.points ? Number((realB.points / 1000).toFixed(2)) : ratingSeed(teamB);
+  return [
+    buildRealCs2Rating(teamA, ratingA, ratingB, realA),
+    buildRealCs2Rating(teamB, ratingB, ratingA, realB)
+  ];
+}
+
+function buildRealCs2Rating(teamName: string, rating: number, opponentRating: number, realTeam: ReturnType<typeof getRealCs2Team>): TeamRatingFactor {
+  const hasRanking = Boolean(realTeam?.rank && realTeam.points);
+  return {
+    teamName,
+    rating,
+    rank: realTeam?.rank ?? Math.max(1, Math.round(24 - rating * 9)),
+    ratingDiff: Number((rating - opponentRating).toFixed(2)),
+    trend: hasRanking ? `HLTV #${realTeam?.rank}, ${realTeam?.points} points` : "нет в HLTV top snapshot, используется fallback",
+    source: hasRanking
+      ? `HLTV Ranking 2026-06-01: ${cs2FoundationSources.ranking}`
+      : `HLTV team page без top-rank snapshot: ${realTeam?.sources.team ?? "нет источника"}`,
+    badge: hasRanking ? "real" : "insufficient"
+  };
 }
 
 function fallbackFootballContext(match: MatchWithTeams): FootballContext {

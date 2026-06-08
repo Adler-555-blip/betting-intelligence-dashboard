@@ -505,14 +505,15 @@ function FootballFactorCard({ title, factor, teamA, teamB, emphasized = false }:
 }
 
 function TeamRatingSection({ ratings }: { ratings: TeamRatingFactor[] }) {
+  const badge: DataBadge = ratings.every((rating) => rating.badge === "real") ? "real" : ratings.some((rating) => rating.badge === "real") ? "insufficient" : "demo";
   return (
     <section className="terminal-card border-terminal-green/30 p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Рейтинг команд</h2>
-          <p className="mt-1 text-sm text-terminal-muted">HLTV Rating-подобный демо-рейтинг для сравнения силы команд.</p>
+          <p className="mt-1 text-sm text-terminal-muted">HLTV ranking snapshot для real CS2 foundation. Если команда отсутствует в snapshot, это отмечается как недостаток данных.</p>
         </div>
-        <DataBadgeView value="demo" size="large" />
+        <DataBadgeView value={badge} size="large" />
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
         {ratings.map((rating) => (
