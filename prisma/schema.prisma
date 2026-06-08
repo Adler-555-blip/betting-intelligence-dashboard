@@ -57,6 +57,7 @@ model Match {
   watchlistItems WatchlistItem[]
   journalEntries BetJournalEntry[]
   newsItems      NewsItem[]
+  edgeTrackingEntries EdgeTrackingEntry[]
 }
 
 model Bookmaker {
@@ -134,4 +135,26 @@ model NewsItem {
   publishedAt DateTime
   match       Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
   team        Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+}
+
+model EdgeTrackingEntry {
+  id                 String    @id @default(cuid())
+  matchId            String
+  edgeType           String
+  signalStrength     Int
+  predictedOutcome   String
+  relatedMarket      String
+  bookmakerOdds      Float?
+  impliedProbability Int?
+  actualOutcome      String?
+  status             String    @default("pending")
+  profitLoss         Float?
+  createdAt          DateTime  @default(now())
+  resolvedAt         DateTime?
+  match              Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, edgeType, relatedMarket])
+  @@index([status])
+  @@index([edgeType])
+  @@index([signalStrength])
 }

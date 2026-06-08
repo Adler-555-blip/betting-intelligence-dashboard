@@ -116,3 +116,25 @@ CREATE TABLE IF NOT EXISTS "NewsItem" (
   CONSTRAINT "NewsItem_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "NewsItem_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "Team" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS "EdgeTrackingEntry" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "matchId" TEXT NOT NULL,
+  "edgeType" TEXT NOT NULL,
+  "signalStrength" INTEGER NOT NULL,
+  "predictedOutcome" TEXT NOT NULL,
+  "relatedMarket" TEXT NOT NULL,
+  "bookmakerOdds" REAL,
+  "impliedProbability" INTEGER,
+  "actualOutcome" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'pending',
+  "profitLoss" REAL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "resolvedAt" DATETIME,
+  CONSTRAINT "EdgeTrackingEntry_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EdgeTrackingEntry_matchId_edgeType_relatedMarket_key" ON "EdgeTrackingEntry" ("matchId", "edgeType", "relatedMarket");
+CREATE INDEX IF NOT EXISTS "EdgeTrackingEntry_status_idx" ON "EdgeTrackingEntry" ("status");
+CREATE INDEX IF NOT EXISTS "EdgeTrackingEntry_edgeType_idx" ON "EdgeTrackingEntry" ("edgeType");
+CREATE INDEX IF NOT EXISTS "EdgeTrackingEntry_signalStrength_idx" ON "EdgeTrackingEntry" ("signalStrength");

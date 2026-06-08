@@ -48,6 +48,30 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
     window.localStorage.setItem(storageKey, JSON.stringify(opinion));
   }, [hydrated, opinion, storageKey]);
 
+  useEffect(() => {
+    if (!edges.length) return;
+    const controller = new AbortController();
+    fetch("/api/edge-tracking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        edges: edges.map((edge) => ({
+          matchId,
+          edgeType: edge.type,
+          signalStrength: edge.signalStrength,
+          predictedOutcome: edge.predictedOutcome,
+          relatedMarket: edge.oddsComparison.market,
+          bookmakerOdds: edge.oddsComparison.odds || null,
+          impliedProbability: edge.oddsComparison.impliedProbability || null
+        }))
+      })
+    }).catch(() => {
+      // Tracking is helpful for validation, but the match page should stay usable if persistence fails.
+    });
+    return () => controller.abort();
+  }, [edges, matchId]);
+
   const disagreement = buildDisagreement(topEdge, opinion);
 
   return (
@@ -59,7 +83,7 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
             <h2 className="mt-1 text-3xl font-semibold">Найденные закономерности</h2>
             <p className="mt-2 max-w-3xl text-sm text-terminal-muted">
               Система ищет потенциальные преимущества в матче, показывает силу сигнала и объясняет, почему она так считает.
-              Это не прогноз и не рекомендация к ставке.
+              Это не прогноз и не рекомендация к ставке. Найденные закономерности автоматически попадают в трекинг результатов.
             </p>
           </div>
           {topEdge && (

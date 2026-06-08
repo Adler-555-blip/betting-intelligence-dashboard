@@ -25,6 +25,7 @@ function oddsValue(base: number, step: number, sideBias: number) {
 
 async function main() {
   await prisma.betJournalEntry.deleteMany();
+  await prisma.edgeTrackingEntry.deleteMany();
   await prisma.watchlistItem.deleteMany();
   await prisma.signal.deleteMany();
   await prisma.newsItem.deleteMany();
@@ -180,6 +181,19 @@ async function main() {
       { matchId: matches[0].id, bookmakerId: createdBookmakers[0].id, selectedOutcome: "Победа Team Spirit", odds: 1.82, stake: 100, reasoning: "Линия начала двигаться в сторону Team Spirit. Перед решением нужно проверить выбор карт и текущую форму NAVI.", confidence: 3, result: "pending", tags: JSON.stringify(["prematch", "line-move", "value"]) },
       { matchId: matches[5].id, bookmakerId: createdBookmakers[2].id, selectedOutcome: "Победа BetBoom Team", odds: 2.08, stake: 75, reasoning: "У Team Spirit сильнее общий рейтинг, но рынок дает завышенный коэффициент на BetBoom Team после новостного фона.", confidence: 4, result: "won", profitLoss: 81, tags: JSON.stringify(["prematch", "news-based"]) },
       { matchId: matches[8].id, bookmakerId: createdBookmakers[1].id, selectedOutcome: "Победа BetBoom Team", odds: 1.7, stake: 50, reasoning: "Решение по ходу матча было принято слишком быстро после первой карты. Отметить как эмоциональный вход.", confidence: 2, result: "lost", profitLoss: -50, tags: JSON.stringify(["live", "emotional"]) }
+    ]
+  });
+
+  await prisma.edgeTrackingEntry.createMany({
+    data: [
+      { matchId: matches[0].id, edgeType: "Map Edge", signalStrength: 78, predictedOutcome: "Team Spirit сильнее на Mirage", relatedMarket: "Map Edge / winner", bookmakerOdds: 1.82, impliedProbability: 55, actualOutcome: "Карта подтвердила преимущество Team Spirit", status: "hit", profitLoss: 82, resolvedAt: hoursFromNow(-4) },
+      { matchId: matches[0].id, edgeType: "Player Edge", signalStrength: 71, predictedOutcome: "donk: высокий объем киллов", relatedMarket: "Player kills", bookmakerOdds: 1.9, impliedProbability: 53, actualOutcome: "Игрок прошел условную линию", status: "hit", profitLoss: 90, resolvedAt: hoursFromNow(-3) },
+      { matchId: matches[1].id, edgeType: "CT/T Edge", signalStrength: 64, predictedOutcome: "CT/T профиль Ancient", relatedMarket: "Rounds / side profile", bookmakerOdds: 1.95, impliedProbability: 51, actualOutcome: "Сторона не дала ожидаемого преимущества", status: "miss", profitLoss: -100, resolvedAt: hoursFromNow(-2) },
+      { matchId: matches[2].id, edgeType: "Tournament Edge", signalStrength: 69, predictedOutcome: "Формат BO1 повышает дисперсию", relatedMarket: "Tournament context", bookmakerOdds: null, impliedProbability: null, actualOutcome: "Фактор подтвердился частично", status: "void", profitLoss: 0, resolvedAt: hoursFromNow(-1) },
+      { matchId: matches[5].id, edgeType: "Line Movement Edge", signalStrength: 73, predictedOutcome: "Движение линии в сторону BetBoom Team", relatedMarket: "winner", bookmakerOdds: 2.08, impliedProbability: 48, actualOutcome: "Линия двигалась верно", status: "hit", profitLoss: 108, resolvedAt: hoursFromNow(-6) },
+      { matchId: matches[6].id, edgeType: "Player Edge", signalStrength: 58, predictedOutcome: "Fallback player profile", relatedMarket: "Player props", bookmakerOdds: null, impliedProbability: null, actualOutcome: "Недостаточно подтверждения", status: "miss", profitLoss: -50, resolvedAt: hoursFromNow(-7) },
+      { matchId: matches[10].id, edgeType: "Tournament Edge", signalStrength: 66, predictedOutcome: "Mexico получает турнирный контекст открытия", relatedMarket: "1x2", bookmakerOdds: 2.05, impliedProbability: 49, actualOutcome: null, status: "pending" },
+      { matchId: matches[10].id, edgeType: "Line Movement Edge", signalStrength: 62, predictedOutcome: "Демо-движение линии 1X2", relatedMarket: "1x2", bookmakerOdds: 3.25, impliedProbability: 31, actualOutcome: null, status: "pending" }
     ]
   });
 }

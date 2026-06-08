@@ -27,6 +27,7 @@ export type BettingEdge = {
   title: string;
   type: EdgeType;
   signalStrength: number;
+  predictedOutcome: string;
   shortSummary: string;
   why: string;
   factorsFor: string[];
@@ -302,6 +303,7 @@ function createEdge(input: {
     title: input.title,
     type: input.type,
     signalStrength: edgeStrength,
+    predictedOutcome: input.marketName ?? input.title,
     shortSummary: `${input.title} — сигнал ${edgeStrength}%`,
     why: input.why,
     factorsFor: input.factorsFor,
