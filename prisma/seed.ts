@@ -11,7 +11,8 @@ const bookmakers = [
 
 const teams = {
   cs2: ["Team Spirit", "NAVI", "Vitality", "MOUZ", "FaZe Clan"],
-  dota2: ["Team Spirit", "BetBoom Team", "Tundra", "Gaimin Gladiators", "Team Falcons"]
+  dota2: ["Team Spirit", "BetBoom Team", "Tundra", "Gaimin Gladiators", "Team Falcons"],
+  football: ["Mexico", "South Africa", "Canada", "Switzerland", "Brazil", "Scotland", "Morocco", "Haiti", "Germany", "England", "Argentina", "France", "Spain", "Portugal", "Korea Republic", "Czechia"]
 };
 
 function hoursFromNow(hours: number) {
@@ -37,8 +38,8 @@ async function main() {
   const user = await prisma.user.create({ data: { name: "Аналитик" } });
   const createdBookmakers = await Promise.all(bookmakers.map((bookmaker) => prisma.bookmaker.create({ data: bookmaker })));
 
-  const createdTeams: Record<"cs2" | "dota2", Team[]> = { cs2: [], dota2: [] };
-  for (const game of ["cs2", "dota2"] as const) {
+  const createdTeams: Record<"cs2" | "dota2" | "football", Team[]> = { cs2: [], dota2: [], football: [] };
+  for (const game of ["cs2", "dota2", "football"] as const) {
     for (const name of teams[game]) {
       createdTeams[game].push(await prisma.team.create({ data: { name, game, externalIds: JSON.stringify({ mock: name.toLowerCase().replaceAll(" ", "-") }) } }));
     }
@@ -50,7 +51,29 @@ async function main() {
     }),
     dota2: await prisma.tournament.create({
       data: { name: "DreamLeague Season 27", game: "dota2", startDate: hoursFromNow(-24), endDate: hoursFromNow(96), tier: "S", externalIds: JSON.stringify({ mock: "dreamleague-season-27" }) }
+    }),
+    football: await prisma.tournament.create({
+      data: {
+        name: "FIFA World Cup 2026",
+        game: "football",
+        startDate: new Date("2026-06-11T00:00:00.000Z"),
+        endDate: new Date("2026-07-19T00:00:00.000Z"),
+        tier: "World Cup",
+        externalIds: JSON.stringify({ source: "FIFA", officialSchedule: "2026-06-11 to 2026-07-19" })
+      }
     })
+  };
+
+  const footballScheduleMeta: Record<string, { officialDate: string; venue: string; scheduleKind: "official" | "demo"; source: string }> = {
+    "Mexico-South Africa": { officialDate: "11 июня 2026", venue: "Mexico City Stadium", scheduleKind: "official", source: "FIFA match schedule" },
+    "Switzerland-Canada": { officialDate: "13 июня 2026", venue: "BC Place Vancouver", scheduleKind: "official", source: "FIFA match schedule" },
+    "Scotland-Brazil": { officialDate: "13 июня 2026", venue: "Miami Stadium", scheduleKind: "official", source: "FIFA match schedule" },
+    "Morocco-Haiti": { officialDate: "13 июня 2026", venue: "Atlanta Stadium", scheduleKind: "official", source: "FIFA match schedule" },
+    "South Africa-Korea Republic": { officialDate: "18 июня 2026", venue: "Estadio Monterrey", scheduleKind: "official", source: "FIFA match schedule" },
+    "Czechia-Mexico": { officialDate: "24 июня 2026", venue: "Mexico City Stadium", scheduleKind: "official", source: "FIFA match schedule" },
+    "Germany-England": { officialDate: "Демо-матч в окне группового этапа", venue: "Демо-площадка", scheduleKind: "demo", source: "Demo fixture" },
+    "Argentina-France": { officialDate: "Демо-матч в окне группового этапа", venue: "Демо-площадка", scheduleKind: "demo", source: "Demo fixture" },
+    "Spain-Portugal": { officialDate: "Демо-матч в окне группового этапа", venue: "Демо-площадка", scheduleKind: "demo", source: "Demo fixture" }
   };
 
   const matchSpecs = [
@@ -63,11 +86,23 @@ async function main() {
     ["dota2", 2, 3, 4, "prematch", "BO3", 88],
     ["dota2", 4, 0, 19, "prematch", "BO5", 76],
     ["dota2", 1, 2, -2, "live", "BO3", 82],
-    ["dota2", 3, 4, -8, "finished", "BO3", 58]
+    ["dota2", 3, 4, -8, "finished", "BO3", 58],
+    ["football", 0, 1, 3, "prematch", "Group A", 96],
+    ["football", 3, 2, 8, "prematch", "Group B", 90],
+    ["football", 5, 4, 14, "prematch", "Group C", 93],
+    ["football", 6, 7, 25, "prematch", "Group C", 78],
+    ["football", 1, 14, 31, "prematch", "Group A", 86],
+    ["football", 15, 0, 39, "prematch", "Group A", 82],
+    ["football", 8, 9, 45, "prematch", "Group stage", 86],
+    ["football", 10, 11, 46, "prematch", "Group stage", 92],
+    ["football", 12, 13, 47, "prematch", "Group stage", 88]
   ] as const;
 
   const matches = [];
   for (const [game, aIndex, bIndex, startOffset, status, format, importanceScore] of matchSpecs) {
+    const teamAName = createdTeams[game][aIndex].name;
+    const teamBName = createdTeams[game][bIndex].name;
+    const footballMeta = game === "football" ? footballScheduleMeta[`${teamAName}-${teamBName}`] : undefined;
     matches.push(await prisma.match.create({
       data: {
         game,
@@ -78,8 +113,17 @@ async function main() {
         status,
         format,
         importanceScore,
-        externalIds: JSON.stringify({ mock: `${game}-${aIndex}-${bIndex}` }),
-        decisionNotes: status === "live" ? "Матч уже идет: сначала проверить текущую карту, экономику/драфт и скорость движения линии." : null
+        externalIds: JSON.stringify(game === "football" ? {
+          source: footballMeta?.source ?? "Demo fixture",
+          mock: `${game}-${aIndex}-${bIndex}`,
+          officialDate: footballMeta?.officialDate ?? "Демо-матч в окне турнира",
+          venue: footballMeta?.venue ?? "Демо-площадка",
+          scheduleKind: footballMeta?.scheduleKind ?? "demo",
+          officialTournamentWindow: "11 June - 19 July 2026"
+        } : { mock: `${game}-${aIndex}-${bIndex}` }),
+        decisionNotes: game === "football"
+          ? "Демо-время сдвинуто ближе к текущей дате, чтобы матч отображался в рабочем дашборде. Турнирный контекст основан на расписании FIFA World Cup 2026."
+          : status === "live" ? "Матч уже идет: сначала проверить текущую карту, экономику/драфт и скорость движения линии." : null
       }
     }));
   }
@@ -88,14 +132,16 @@ async function main() {
     for (const bookmaker of createdBookmakers) {
       for (let step = 6; step >= 0; step -= 1) {
         const timestamp = new Date(Date.now() - step * 60 * 60 * 1000);
-        const baseA = match.game === "cs2" ? 1.78 : 1.86;
-        const baseB = match.game === "cs2" ? 2.02 : 1.94;
-        await prisma.oddsSnapshot.createMany({
-          data: [
-            { matchId: match.id, bookmakerId: bookmaker.id, market: "winner", selection: "teamA", odds: oddsValue(baseA, step, bookmaker.slug.length / 20), timestamp },
-            { matchId: match.id, bookmakerId: bookmaker.id, market: "winner", selection: "teamB", odds: oddsValue(baseB, step, -bookmaker.slug.length / 24), timestamp }
-          ]
-        });
+        const baseA = match.game === "football" ? 2.05 : match.game === "cs2" ? 1.78 : 1.86;
+        const baseB = match.game === "football" ? 2.75 : match.game === "cs2" ? 2.02 : 1.94;
+        const oddsData = [
+          { matchId: match.id, bookmakerId: bookmaker.id, market: match.game === "football" ? "1x2" : "winner", selection: "teamA", odds: oddsValue(baseA, step, bookmaker.slug.length / 20), timestamp },
+          { matchId: match.id, bookmakerId: bookmaker.id, market: match.game === "football" ? "1x2" : "winner", selection: "teamB", odds: oddsValue(baseB, step, -bookmaker.slug.length / 24), timestamp }
+        ];
+        if (match.game === "football") {
+          oddsData.push({ matchId: match.id, bookmakerId: bookmaker.id, market: "1x2", selection: "draw", odds: oddsValue(3.25, step, bookmaker.slug.length / 30), timestamp });
+        }
+        await prisma.oddsSnapshot.createMany({ data: oddsData });
       }
     }
   }

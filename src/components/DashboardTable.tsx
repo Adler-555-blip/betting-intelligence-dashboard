@@ -18,7 +18,8 @@ export function DashboardTable({ matches }: { matches: MatchRow[] }) {
   const gameFilters = [
     { value: "all", label: "Все дисциплины" },
     { value: "cs2", label: "CS2" },
-    { value: "dota2", label: "Dota 2" }
+    { value: "dota2", label: "Dota 2" },
+    { value: "football", label: "Футбол" }
   ] as const;
   const statusFilters = [
     { value: "all", label: "Все статусы" },
@@ -56,6 +57,7 @@ export function DashboardTable({ matches }: { matches: MatchRow[] }) {
               <th className="px-4 py-3">Статус</th>
               <th className="px-4 py-3">Важность</th>
               <th className="px-4 py-3">Лучший A</th>
+              <th className="px-4 py-3">Ничья</th>
               <th className="px-4 py-3">Лучший B</th>
               <th className="px-4 py-3">Линия</th>
               <th className="px-4 py-3">Действие</th>
@@ -64,7 +66,7 @@ export function DashboardTable({ matches }: { matches: MatchRow[] }) {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-terminal-muted">
+                <td colSpan={10} className="px-4 py-10 text-center text-terminal-muted">
                   По выбранным фильтрам матчей нет. Измените дисциплину или статус.
                 </td>
               </tr>
@@ -86,6 +88,7 @@ export function DashboardTable({ matches }: { matches: MatchRow[] }) {
                   <td className="px-4 py-4"><StatusPill value={match.status} /></td>
                   <td className="px-4 py-4">{match.importanceScore}</td>
                   <td className="px-4 py-4 text-terminal-green">{bestOdds(match.oddsSnapshots, "teamA")?.toFixed(2) ?? "-"}</td>
+                  <td className="px-4 py-4 text-terminal-green">{match.game === "football" ? (bestOdds(match.oddsSnapshots, "draw")?.toFixed(2) ?? "-") : "-"}</td>
                   <td className="px-4 py-4 text-terminal-green">{bestOdds(match.oddsSnapshots, "teamB")?.toFixed(2) ?? "-"}</td>
                   <td className="px-4 py-4"><MovementIndicator movement={movement} /></td>
                   <td className="px-4 py-4"><WatchlistButton matchId={match.id} initialActive={match.watchlistItems.length > 0} /></td>

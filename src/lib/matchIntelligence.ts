@@ -70,6 +70,25 @@ export type H2HFactor = {
   badge: DataBadge;
 };
 
+export type FootballFactor = {
+  label: string;
+  teamA: string;
+  teamB: string;
+  source: string;
+  badge: DataBadge;
+};
+
+export type FootballContext = {
+  group: string;
+  venue: string;
+  officialDate: string;
+  tournamentWindow: string;
+  source: string;
+  badge: DataBadge;
+  factors: FootballFactor[];
+  checklist: string[];
+};
+
 export type ScoreBreakdown = {
   label: string;
   teamA: number;
@@ -86,6 +105,7 @@ export type MatchIntelligence = {
   maps: MapFactor[];
   teamRatings: TeamRatingFactor[];
   playerKills: PlayerKillFactor[];
+  footballContext?: FootballContext;
   h2h: H2HFactor[];
   patchContext?: {
     patch: string;
@@ -115,6 +135,35 @@ type MatchWithTeams = Match & {
 };
 
 const cs2Maps = ["Mirage", "Inferno", "Nuke", "Ancient", "Dust2", "Anubis", "Vertigo"];
+
+const footballRankings: Record<string, number> = {
+  Argentina: 1,
+  France: 2,
+  Spain: 3,
+  England: 4,
+  Portugal: 5,
+  Brazil: 6,
+  Germany: 9,
+  Morocco: 12,
+  Mexico: 15,
+  Switzerland: 17,
+  Canada: 26,
+  Scotland: 38,
+  "South Africa": 57,
+  Haiti: 86,
+  "Korea Republic": 24,
+  Czechia: 36
+};
+
+const footballVenues: Record<string, string> = {
+  Mexico: "Mexico City, Estadio Azteca",
+  Canada: "Toronto, BMO Field",
+  Brazil: "MetLife Stadium, New Jersey",
+  Morocco: "Miami, Hard Rock Stadium",
+  Germany: "Dallas, AT&T Stadium",
+  Argentina: "Los Angeles, SoFi Stadium",
+  Spain: "Kansas City, Arrowhead Stadium"
+};
 
 const rosterFallback: Record<string, PlayerInfo[]> = {
   "Team Spirit": [
@@ -192,12 +241,17 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
   const teamB = teamBReal ?? fallbackForm(match.teamB.name, match.importanceScore, "B", "Демо-данные");
   const maps = match.game === "cs2" ? fallbackMaps(match.teamA.name, match.teamB.name) : [];
   const teamRatings = match.game === "cs2" ? fallbackTeamRatings(match.teamA.name, match.teamB.name) : [];
+  const footballContext = match.game === "football" ? fallbackFootballContext(match) : undefined;
   const h2h = fallbackH2H(match.teamA.name, match.teamB.name, match.game);
   const teamARoster = rosterFallback[match.teamA.name] ?? [];
   const teamBRoster = rosterFallback[match.teamB.name] ?? [];
   const playerKills = match.game === "cs2" ? fallbackPlayerKills(match.teamA.name, teamARoster).concat(fallbackPlayerKills(match.teamB.name, teamBRoster)) : [];
-  const factorsFor = buildPositiveFactors(teamA, teamB, maps, h2h, match.teamA.name, match.teamB.name);
-  const factorsAgainst = buildNegativeFactors(teamA, teamB, maps, h2h, teamARoster, teamBRoster, match.teamA.name, match.teamB.name);
+  const factorsFor = match.game === "football" && footballContext
+    ? buildFootballPositiveFactors(match.teamA.name, match.teamB.name, footballContext)
+    : buildPositiveFactors(teamA, teamB, maps, h2h, match.teamA.name, match.teamB.name);
+  const factorsAgainst = match.game === "football" && footballContext
+    ? buildFootballNegativeFactors(match.teamA.name, match.teamB.name, footballContext)
+    : buildNegativeFactors(teamA, teamB, maps, h2h, teamARoster, teamBRoster, match.teamA.name, match.teamB.name);
   const score = buildScore(match, teamA, teamB, maps, h2h, teamARoster, teamBRoster, teamRatings, playerKills);
 
   return {
@@ -209,6 +263,7 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
     maps,
     teamRatings,
     playerKills,
+    footballContext,
     h2h,
     patchContext:
       match.game === "dota2"
@@ -222,18 +277,30 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
     factorsAgainst,
     score,
     dataSummary: {
-      real: [teamA.badge === "real" ? `Форма ${teamA.teamName}: OpenDota` : "", teamB.badge === "real" ? `Форма ${teamB.teamName}: OpenDota` : ""].filter(Boolean),
+      real: [
+        teamA.badge === "real" ? `Форма ${teamA.teamName}: OpenDota` : "",
+        teamB.badge === "real" ? `Форма ${teamB.teamName}: OpenDota` : "",
+        match.game === "football" && footballContext?.badge === "real" ? "Турнирный контекст FIFA World Cup 2026" : ""
+      ].filter(Boolean),
       demo: [
         teamA.badge === "demo" ? `Форма ${teamA.teamName}` : "",
         teamB.badge === "demo" ? `Форма ${teamB.teamName}` : "",
         "Составы",
-        match.game === "cs2" ? "Статистика карт" : "Контекст патча",
+        match.game === "cs2" ? "Статистика карт" : "",
+        match.game === "dota2" ? "Контекст патча" : "",
         match.game === "cs2" ? "Рейтинг команд" : "",
         match.game === "cs2" ? "Киллы игроков" : "",
         match.game === "cs2" ? "CT/T стороны" : "",
+        match.game === "football" ? "Рейтинг сборных" : "",
+        match.game === "football" ? "Форма сборных" : "",
+        match.game === "football" ? "Коэффициенты 1X2" : "",
+        match.game === "football" ? "Календарь и логистика" : "",
+        match.game === "football" && footballContext?.badge === "demo" ? "Демо-пара внутри окна FIFA World Cup 2026" : "",
         "Очные встречи"
       ].filter(Boolean),
-      insufficient: teamARoster.length && teamBRoster.length ? [] : ["Недостаточно данных по составу одной из команд"]
+      insufficient: match.game === "football"
+        ? ["Нет подтвержденных составов и травм", "Нет реальных новостей по сборным", "Нет реальных market signals"]
+        : teamARoster.length && teamBRoster.length ? [] : ["Недостаточно данных по составу одной из команд"]
     }
   };
 }
@@ -320,6 +387,95 @@ function fallbackTeamRatings(teamA: string, teamB: string): TeamRatingFactor[] {
   ];
 }
 
+function fallbackFootballContext(match: MatchWithTeams): FootballContext {
+  const externalIds = parseExternalIds(match.externalIds);
+  const officialDate = externalIds.officialDate ?? "Официальное окно турнира: 11 июня - 19 июля 2026";
+  const venue = externalIds.venue ?? footballVenues[match.teamA.name] ?? "Площадка будет уточнена в демо-наборе";
+  const group = match.format || "Group stage";
+  const hasOfficialSchedule = externalIds.scheduleKind === "official";
+  const rankingA = footballRankings[match.teamA.name] ?? 45;
+  const rankingB = footballRankings[match.teamB.name] ?? 45;
+  const rankingDiff = Math.abs(rankingA - rankingB);
+  const higherRankedTeam = rankingA < rankingB ? match.teamA.name : rankingB < rankingA ? match.teamB.name : "Рейтинг близкий";
+
+  return {
+    group,
+    venue,
+    officialDate,
+    tournamentWindow: "FIFA World Cup 2026: 11 июня - 19 июля 2026",
+    source: hasOfficialSchedule ? "FIFA schedule context, добавлено вручную в seed" : "Demo fixture внутри официального окна турнира",
+    badge: hasOfficialSchedule ? "real" : "demo",
+    factors: [
+      {
+        label: "Рейтинг сборных",
+        teamA: `Демо-рейтинг FIFA: #${rankingA}`,
+        teamB: `Демо-рейтинг FIFA: #${rankingB}`,
+        source: "Демо-ранжирование для MVP",
+        badge: "demo"
+      },
+      {
+        label: "Форма сборных",
+        teamA: "Последние матчи смоделированы по демо-форме",
+        teamB: "Последние матчи смоделированы по демо-форме",
+        source: "Демо-форма",
+        badge: "demo"
+      },
+      {
+        label: "Контекст группы",
+        teamA: `${group}. Матч относится к первому этапу ЧМ-2026.`,
+        teamB: `Разница рейтинга сборных: ${rankingDiff} позиций. Выше в демо-рейтинге: ${higherRankedTeam}.`,
+        source: hasOfficialSchedule ? "FIFA World Cup 2026 schedule context" : "Demo fixture внутри официального окна турнира",
+        badge: hasOfficialSchedule ? "real" : "demo"
+      },
+      {
+        label: "Состав и потери",
+        teamA: "Подтвержденные составы, травмы и дисквалификации не подключены",
+        teamB: "Подтвержденные составы, травмы и дисквалификации не подключены",
+        source: "Нет live-новостей",
+        badge: "insufficient"
+      },
+      {
+        label: "Календарь и логистика",
+        teamA: `Демо-логистика: ${venue}`,
+        teamB: `Официальный контекст: ${officialDate}`,
+        source: "FIFA schedule context + demo logistics",
+        badge: "demo"
+      },
+      {
+        label: "Движение линии 1X2",
+        teamA: "Коэффициент на исход команды сгенерирован для демо",
+        teamB: "Ничья и второй исход показаны как рынок 1X2",
+        source: "Демо-коэффициенты",
+        badge: "demo"
+      },
+      {
+        label: "Турнирная мотивация",
+        teamA: "Первый этап турнира: важны очки и разница мячей",
+        teamB: "Первый этап турнира: риск осторожного темпа выше в стартовых турах",
+        source: "Турнирный контекст",
+        badge: hasOfficialSchedule ? "real" : "demo"
+      }
+    ],
+    checklist: [
+      "Проверить подтвержденные стартовые составы",
+      "Проверить травмы и дисквалификации",
+      "Проверить последние новости сборных",
+      "Сравнить форму в официальных матчах",
+      "Проверить мотивацию в группе",
+      "Проверить движение линии 1X2 ближе к матчу"
+    ]
+  };
+}
+
+function parseExternalIds(value: string | null): Record<string, string> {
+  if (!value) return {};
+  try {
+    return JSON.parse(value) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
 function ratingSeed(teamName: string) {
   const seed = teamName.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return Number((1.02 + (seed % 42) / 100).toFixed(2));
@@ -395,6 +551,27 @@ function buildNegativeFactors(teamA: TeamFormFactor, teamB: TeamFormFactor, maps
   return factors.length ? factors : ["Критичных негативных факторов в доступных данных не найдено."];
 }
 
+function buildFootballPositiveFactors(teamAName: string, teamBName: string, context: FootballContext) {
+  const rating = context.factors.find((item) => item.label === "Рейтинг сборных");
+  const logistics = context.factors.find((item) => item.label === "Календарь и логистика");
+  const motivation = context.factors.find((item) => item.label === "Турнирная мотивация");
+  return [
+    rating ? `${teamAName} и ${teamBName}: рейтинг сборных вынесен отдельно для быстрого сравнения силы.` : "",
+    `${context.group}: официальный турнирный контекст уже известен и не является прогнозом.`,
+    motivation ? `${teamAName} и ${teamBName}: ${motivation.teamA.toLowerCase()}.` : "",
+    logistics ? `Логистика матча отмечена отдельно: ${context.venue}.` : ""
+  ].filter(Boolean);
+}
+
+function buildFootballNegativeFactors(teamAName: string, teamBName: string, context: FootballContext) {
+  return [
+    `По ${teamAName} и ${teamBName} нет подтвержденных составов, травм и дисквалификаций.`,
+    "Форма сборных и рейтинги пока являются демо-данными, их нельзя воспринимать как реальный источник.",
+    "Движение линии 1X2 сгенерировано для демонстрации интерфейса.",
+    `${context.officialDate}: реальная дата известна, но время в демо может быть сдвинуто, чтобы матч попадал в витрину Dashboard.`
+  ];
+}
+
 function buildScore(match: MatchWithTeams, teamA: TeamFormFactor, teamB: TeamFormFactor, maps: MapFactor[], h2h: H2HFactor[], rosterA: PlayerInfo[], rosterB: PlayerInfo[], ratings: TeamRatingFactor[], playerKills: PlayerKillFactor[]) {
   const line = lineScore(match.oddsSnapshots);
   const h2hA = h2h.length ? h2h.filter((item) => item.winner === match.teamA.name).length / h2h.length : 0.5;
@@ -412,9 +589,10 @@ function buildScore(match: MatchWithTeams, teamA: TeamFormFactor, teamB: TeamFor
   const rosterScoreA = rosterA.length >= 5 ? 8 : 4;
   const rosterScoreB = rosterB.length >= 5 ? 8 : 4;
 
-  const breakdown =
-    match.game === "cs2"
-      ? [
+  let breakdown: ScoreBreakdown[];
+
+  if (match.game === "cs2") {
+    breakdown = [
           { label: "Форма команды", teamA: Math.round(((teamA.winrate ?? 50) / 100) * 18), teamB: Math.round(((teamB.winrate ?? 50) / 100) * 18), note: "Вес 18%" },
           { label: "Рейтинг команды", teamA: Math.round((ratingA / ratingTotal) * 14), teamB: Math.round((ratingB / ratingTotal) * 14), note: "Вес 14%" },
           { label: "Map pool", teamA: Math.round(mapA * 16), teamB: Math.round(mapB * 16), note: "Вес 16%" },
@@ -422,14 +600,31 @@ function buildScore(match: MatchWithTeams, teamA: TeamFormFactor, teamB: TeamFor
           { label: "Игроки и киллы", teamA: Math.round((killsA / killsTotal) * 14), teamB: Math.round((killsB / killsTotal) * 14), note: "Вес 14%" },
           { label: "Очные встречи", teamA: Math.round(h2hA * 12), teamB: Math.round(h2hB * 12), note: "Вес 12%" },
           { label: "Движение линии", teamA: Math.round(line.teamA * 0.93), teamB: Math.round(line.teamB * 0.93), note: "Вес 14%" }
-        ]
-      : [
+        ];
+  } else if (match.game === "football") {
+    const footballRankA = footballRankings[match.teamA.name] ?? 45;
+    const footballRankB = footballRankings[match.teamB.name] ?? 45;
+    const ratingWeightA = 120 - footballRankA;
+    const ratingWeightB = 120 - footballRankB;
+    const ratingWeightTotal = ratingWeightA + ratingWeightB;
+    breakdown = [
+      { label: "Рейтинг сборных", teamA: Math.round((ratingWeightA / ratingWeightTotal) * 22), teamB: Math.round((ratingWeightB / ratingWeightTotal) * 22), note: "Вес 22%" },
+      { label: "Форма сборных", teamA: Math.round(((teamA.winrate ?? 50) / 100) * 20), teamB: Math.round(((teamB.winrate ?? 50) / 100) * 20), note: "Вес 20%" },
+      { label: "Контекст группы", teamA: 8, teamB: 8, note: "Вес 16%" },
+      { label: "Состав и потери", teamA: 6, teamB: 6, note: "Вес 12%" },
+      { label: "Календарь и логистика", teamA: 5, teamB: 5, note: "Вес 10%" },
+      { label: "Очные встречи", teamA: Math.round(h2hA * 8), teamB: Math.round(h2hB * 8), note: "Вес 8%" },
+      { label: "Движение линии 1X2", teamA: Math.round(line.teamA * 0.8), teamB: Math.round(line.teamB * 0.8), note: "Вес 12%" }
+    ];
+  } else {
+    breakdown = [
           { label: "Форма", teamA: Math.round(((teamA.winrate ?? 50) / 100) * 30), teamB: Math.round(((teamB.winrate ?? 50) / 100) * 30), note: "Вес 30%" },
           { label: "Очные встречи", teamA: Math.round(h2hA * 20), teamB: Math.round(h2hB * 20), note: "Вес 20%" },
           { label: "Дисциплинный фактор", teamA: 10, teamB: 10, note: "Вес 20%" },
           { label: "Состав", teamA: rosterScoreA + 7, teamB: rosterScoreB + 7, note: "Вес 15%" },
           { label: "Линия", teamA: line.teamA, teamB: line.teamB, note: "Вес 15%" }
         ];
+  }
   const rawA = breakdown.reduce((sum, item) => sum + item.teamA, 0);
   const rawB = breakdown.reduce((sum, item) => sum + item.teamB, 0);
   const partial = teamA.badge !== "real" || teamB.badge !== "real" || !maps.length;

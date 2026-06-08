@@ -30,8 +30,9 @@ const voteLabels: Record<Vote, string> = {
   missing_data: "Не хватает данных"
 };
 
-export function BlockUsefulnessFeedback({ matchId }: { matchId: string }) {
+export function BlockUsefulnessFeedback({ matchId, blocksOverride }: { matchId: string; blocksOverride?: string[] }) {
   const storageKey = useMemo(() => `match-feedback:${matchId}`, [matchId]);
+  const feedbackBlocks = blocksOverride ?? blocks;
   const [feedback, setFeedback] = useState<Record<string, Feedback>>({});
 
   useEffect(() => {
@@ -70,7 +71,7 @@ export function BlockUsefulnessFeedback({ matchId }: { matchId: string }) {
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        {blocks.map((block) => {
+        {feedbackBlocks.map((block) => {
           const value = feedback[block];
           return (
             <div key={block} className="rounded border border-terminal-border bg-terminal-bg p-4">

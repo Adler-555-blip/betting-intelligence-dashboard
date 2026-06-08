@@ -9,4 +9,5 @@ export type OddsCell = {
   lastUpdated: Date | null;
   changeA: number;
   changeB: number;
+  changeDraw?: number;
 };

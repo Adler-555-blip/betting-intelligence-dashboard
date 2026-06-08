@@ -4,7 +4,7 @@ import { ru } from "date-fns/locale";
 import { getJournalData, getMatch } from "@/src/lib/data";
 import { chartSeries, latestOddsRows } from "@/src/lib/odds";
 import { gameLabel, severityLabel, signalTypeLabel } from "@/src/lib/display";
-import { getMatchIntelligence, type DataBadge, type MapFactor, type MatchIntelligence, type PlayerKillFactor, type TeamFormFactor, type TeamRatingFactor } from "@/src/lib/matchIntelligence";
+import { getMatchIntelligence, type DataBadge, type FootballContext, type MapFactor, type MatchIntelligence, type PlayerKillFactor, type TeamFormFactor, type TeamRatingFactor } from "@/src/lib/matchIntelligence";
 import { OddsChart } from "@/src/components/OddsChart";
 import { StatusPill } from "@/src/components/StatusPill";
 import { JournalForm } from "@/src/components/JournalForm";
@@ -28,6 +28,10 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
       ? `${match.teamA.name} выглядит сильнее по доступным факторам`
       : `${match.teamB.name} выглядит сильнее по доступным факторам`;
   const scoreBadge = intelligence.score.confidence === "high" ? "real" : intelligence.score.confidence === "medium" ? "demo" : "insufficient";
+  const marketLabel = match.game === "football" ? "1X2" : "победитель матча";
+  const feedbackBlocks = match.game === "football"
+    ? footballFeedbackBlocks
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -57,7 +61,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
             <p className="metric-label">Match Intelligence Score</p>
             <h2 className="mt-1 text-3xl font-semibold">Кто выглядит сильнее, почему и где риски</h2>
             <p className="mt-2 max-w-3xl text-sm text-terminal-muted">
-              Нейтральная сводка без рекомендаций к ставке: форма, рейтинг, map pool, CT/T, игроки, очные встречи и движение линии.
+              Нейтральная сводка без рекомендаций к ставке: форма, рейтинг, турнирный контекст, составы, очные встречи и движение линии.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -80,6 +84,9 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
       <MatchSummarySection summary={summary} />
 
       {match.game === "cs2" && <TeamRatingSection ratings={intelligence.teamRatings} />}
+      {match.game === "football" && intelligence.footballContext && (
+        <FootballAnalysisSection context={intelligence.footballContext} teamA={match.teamA.name} teamB={match.teamB.name} />
+      )}
 
       <section className="grid gap-4 lg:grid-cols-2">
         <TeamFactorCard factor={intelligence.teamA} />
@@ -193,8 +200,8 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="terminal-card p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Движение коэффициента</h2>
-            <span className="metric-label">Рынок: победитель матча</span>
+            <h2 className="text-xl font-semibold">{match.game === "football" ? "Движение линии 1X2" : "Движение коэффициента"}</h2>
+            <span className="metric-label">Рынок: {marketLabel}</span>
           </div>
           <OddsChart data={series} bookmakers={bookmakers} />
         </div>
@@ -240,9 +247,14 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
                 <td className="px-4 py-3">{row.bookmaker}</td>
                 <td className="px-4 py-3 text-terminal-green">{row.teamA?.toFixed(2) ?? "-"}</td>
                 <td className="px-4 py-3 text-terminal-green">{row.teamB?.toFixed(2) ?? "-"}</td>
-                <td className="px-4 py-3 text-terminal-muted">-</td>
+                <td className={match.game === "football" ? "px-4 py-3 text-terminal-green" : "px-4 py-3 text-terminal-muted"}>
+                  {match.game === "football" ? row.draw?.toFixed(2) ?? "-" : "-"}
+                </td>
                 <td className="px-4 py-3 text-terminal-muted">{row.lastUpdated ? format(row.lastUpdated, "HH:mm") : "-"}</td>
-                <td className="px-4 py-3">{row.changeA >= 0 ? "+" : ""}{row.changeA.toFixed(2)} / {row.changeB >= 0 ? "+" : ""}{row.changeB.toFixed(2)}</td>
+                <td className="px-4 py-3">
+                  {row.changeA >= 0 ? "+" : ""}{row.changeA.toFixed(2)} / {row.changeB >= 0 ? "+" : ""}{row.changeB.toFixed(2)}
+                  {match.game === "football" ? ` / ${row.changeDraw && row.changeDraw >= 0 ? "+" : ""}${(row.changeDraw ?? 0).toFixed(2)}` : ""}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -253,7 +265,9 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         <div className="terminal-card p-5">
           <h2 className="text-xl font-semibold">Заметки по командам</h2>
           <p className="mt-3 text-sm text-terminal-muted">
-            Составы стабильны, критичных замен в демо-данных нет. Перед реальным решением проверьте карты, форму и последние новости.
+            {match.game === "football"
+              ? "Подтвержденные составы, травмы и новости пока не подключены. Перед реальным решением проверьте стартовые составы, форму и турнирный контекст."
+              : "Составы стабильны, критичных замен в демо-данных нет. Перед реальным решением проверьте карты, форму и последние новости."}
           </p>
         </div>
         <div className="terminal-card p-5">
@@ -281,25 +295,36 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         <JournalForm matches={matchOptions} bookmakers={journalData.bookmakers} defaultMatchId={match.id} />
       </section>
 
-      <BlockUsefulnessFeedback matchId={match.id} />
+      <BlockUsefulnessFeedback matchId={match.id} blocksOverride={feedbackBlocks} />
 
-      <NextStepsSection />
+      <NextStepsSection game={match.game} />
 
       <PreBetSurvey matchId={match.id} />
 
       <section className="terminal-card p-5">
-        <h2 className="text-xl font-semibold">Что спросить у беттора</h2>
-        <div className="mt-4 grid gap-3 text-sm text-terminal-muted md:grid-cols-2">
-          {[
-            "Какие 3 блока ты смотришь в первую очередь?",
-            "Какие блоки можно убрать?",
-            "Каких данных не хватает для ставки?",
-            "Важны ли тебе CT/T раунды?",
-            "Важны ли средние киллы игрока?",
-            "Важен ли рейтинг команды?",
-            "Какие данные ты обычно ищешь вручную?",
-            "Что должно быть выше на странице?"
-          ].map((question) => (
+          <h2 className="text-xl font-semibold">Что спросить у беттора</h2>
+          <div className="mt-4 grid gap-3 text-sm text-terminal-muted md:grid-cols-2">
+          {(match.game === "football"
+            ? [
+                "Какие 3 блока ты смотришь в первую очередь?",
+                "Какие блоки можно убрать?",
+                "Каких данных не хватает для решения?",
+                "Важен ли тебе рейтинг сборной?",
+                "Важны ли составы и травмы?",
+                "Важен ли контекст группы?",
+                "Какие данные ты обычно ищешь вручную?",
+                "Что должно быть выше на странице?"
+              ]
+            : [
+                "Какие 3 блока ты смотришь в первую очередь?",
+                "Какие блоки можно убрать?",
+                "Каких данных не хватает для ставки?",
+                "Важны ли тебе CT/T раунды?",
+                "Важны ли средние киллы игрока?",
+                "Важен ли рейтинг команды?",
+                "Какие данные ты обычно ищешь вручную?",
+                "Что должно быть выше на странице?"
+              ]).map((question) => (
             <div key={question} className="rounded border border-terminal-border bg-terminal-bg p-3">□ {question}</div>
           ))}
         </div>
@@ -313,6 +338,19 @@ type TeamSummary = {
   advantages: string[];
   risks: string[];
 };
+
+const footballFeedbackBlocks = [
+  "Рейтинг сборных",
+  "Форма сборных",
+  "Контекст группы",
+  "Состав и потери",
+  "Календарь и логистика",
+  "Движение линии 1X2",
+  "Турнирная мотивация",
+  "Что проверить перед решением",
+  "Факторы за/против",
+  "Match Intelligence Score"
+];
 
 function MatchSummarySection({ summary }: { summary: TeamSummary[] }) {
   return (
@@ -354,16 +392,26 @@ function SummaryList({ title, items, tone }: { title: string; items: string[]; t
   );
 }
 
-function NextStepsSection() {
-  const items = [
-    "Реальный рейтинг команд",
-    "Реальные карты и map pool",
-    "Реальная CT/T статистика",
-    "Реальные киллы игроков",
-    "Реальные составы",
-    "Реальные очные встречи",
-    "Реальный турнирный контекст"
-  ];
+function NextStepsSection({ game }: { game: string }) {
+  const items = game === "football"
+    ? [
+        "Реальный FIFA/Coca-Cola ranking",
+        "Подтвержденные стартовые составы",
+        "Травмы и дисквалификации",
+        "Форма последних матчей",
+        "xG, удары и созданные моменты",
+        "Стадион, погода и логистика",
+        "Реальные новости сборных"
+      ]
+    : [
+        "Реальный рейтинг команд",
+        "Реальные карты и map pool",
+        "Реальная CT/T статистика",
+        "Реальные киллы игроков",
+        "Реальные составы",
+        "Реальные очные встречи",
+        "Реальный турнирный контекст"
+      ];
 
   return (
     <section className="terminal-card p-5">
@@ -383,6 +431,71 @@ function NextStepsSection() {
         ))}
       </div>
     </section>
+  );
+}
+
+function FootballAnalysisSection({ context, teamA, teamB }: { context: FootballContext; teamA: string; teamB: string }) {
+  const rating = context.factors.find((item) => item.label === "Рейтинг сборных");
+  const form = context.factors.find((item) => item.label === "Форма сборных");
+  const group = context.factors.find((item) => item.label === "Контекст группы");
+  const roster = context.factors.find((item) => item.label === "Состав и потери");
+  const logistics = context.factors.find((item) => item.label === "Календарь и логистика");
+  const line = context.factors.find((item) => item.label === "Движение линии 1X2");
+  const motivation = context.factors.find((item) => item.label === "Турнирная мотивация");
+
+  return (
+    <section className="space-y-4">
+      <section className="terminal-card border-terminal-green/30 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="metric-label">Футбол / FIFA World Cup 2026</p>
+            <h2 className="mt-1 text-2xl font-semibold">Футбольные факторы матча</h2>
+            <p className="mt-2 max-w-3xl text-sm text-terminal-muted">
+              Для футбола показаны только релевантные факторы: рейтинг сборных, форма, группа, составы, логистика, 1X2 и мотивация.
+            </p>
+          </div>
+          <DataBadgeView value={context.badge} label="● Реальный турнирный контекст" size="large" />
+        </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <FootballFactorCard title="Рейтинг сборных" factor={rating} teamA={teamA} teamB={teamB} emphasized />
+          <FootballFactorCard title="Форма сборных" factor={form} teamA={teamA} teamB={teamB} emphasized />
+          <FootballFactorCard title="Контекст группы" factor={group} teamA={teamA} teamB={teamB} emphasized />
+          <FootballFactorCard title="Состав и потери" factor={roster} teamA={teamA} teamB={teamB} />
+          <FootballFactorCard title="Календарь и логистика" factor={logistics} teamA={teamA} teamB={teamB} />
+          <FootballFactorCard title="Движение линии 1X2" factor={line} teamA={teamA} teamB={teamB} />
+          <FootballFactorCard title="Турнирная мотивация" factor={motivation} teamA={teamA} teamB={teamB} />
+          <div className="rounded border border-terminal-border bg-terminal-bg p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold">Что проверить перед решением</h3>
+              <DataBadgeView value="insufficient" />
+            </div>
+            <div className="mt-3 space-y-2 text-sm text-terminal-muted">
+              {context.checklist.map((item) => <div key={item}>□ {item}</div>)}
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function FootballFactorCard({ title, factor, teamA, teamB, emphasized = false }: { title: string; factor?: FootballContext["factors"][number]; teamA: string; teamB: string; emphasized?: boolean }) {
+  return (
+    <div className={`rounded border bg-terminal-bg p-4 ${emphasized ? "border-terminal-green/30" : "border-terminal-border"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-semibold">{title}</h3>
+        <DataBadgeView value={factor?.badge ?? "insufficient"} size={emphasized ? "large" : "regular"} />
+      </div>
+      {factor ? (
+        <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+          <MetricInline label={teamA} value={factor.teamA} />
+          <MetricInline label={teamB} value={factor.teamB} />
+          <MetricInline label="Источник" value={factor.source} />
+        </div>
+      ) : (
+        <EmptyState text="Недостаточно данных для этого фактора." />
+      )}
+    </div>
   );
 }
 

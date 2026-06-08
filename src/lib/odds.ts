@@ -12,9 +12,9 @@ export function movementFromSnapshots(snapshots: Pick<OddsSnapshot, "odds" | "ti
   return "stable";
 }
 
-export function bestOdds(snapshots: OddsSnapshot[], selection: "teamA" | "teamB") {
+export function bestOdds(snapshots: OddsSnapshot[], selection: "teamA" | "teamB" | "draw") {
   const latestByBook = latestOddsRows(snapshots);
-  const prices = latestByBook.map((row) => (selection === "teamA" ? row.teamA : row.teamB)).filter((price): price is number => Boolean(price));
+  const prices = latestByBook.map((row) => (selection === "teamA" ? row.teamA : selection === "teamB" ? row.teamB : row.draw)).filter((price): price is number => Boolean(price));
   return prices.length ? Math.max(...prices) : null;
 }
 
@@ -30,17 +30,21 @@ export function latestOddsRows(snapshots: OddsSnapshot[]): OddsCell[] {
     const bookmaker = "bookmaker" in sorted[0] ? (sorted[0] as OddsSnapshot & { bookmaker: { name: string; slug: string } }).bookmaker : { name: "Bookmaker", slug: "bookmaker" };
     const latestTeamA = sorted.find((item) => item.selection === "teamA");
     const latestTeamB = sorted.find((item) => item.selection === "teamB");
+    const latestDraw = sorted.find((item) => item.selection === "draw");
     const previousTeamA = sorted.filter((item) => item.selection === "teamA")[1];
     const previousTeamB = sorted.filter((item) => item.selection === "teamB")[1];
+    const previousDraw = sorted.filter((item) => item.selection === "draw")[1];
 
     return {
       bookmaker: bookmaker.name,
       bookmakerSlug: bookmaker.slug,
       teamA: latestTeamA?.odds ?? null,
       teamB: latestTeamB?.odds ?? null,
-      lastUpdated: latestTeamA?.timestamp ?? latestTeamB?.timestamp ?? null,
+      draw: latestDraw?.odds ?? null,
+      lastUpdated: latestTeamA?.timestamp ?? latestTeamB?.timestamp ?? latestDraw?.timestamp ?? null,
       changeA: latestTeamA && previousTeamA ? Number((latestTeamA.odds - previousTeamA.odds).toFixed(2)) : 0,
-      changeB: latestTeamB && previousTeamB ? Number((latestTeamB.odds - previousTeamB.odds).toFixed(2)) : 0
+      changeB: latestTeamB && previousTeamB ? Number((latestTeamB.odds - previousTeamB.odds).toFixed(2)) : 0,
+      changeDraw: latestDraw && previousDraw ? Number((latestDraw.odds - previousDraw.odds).toFixed(2)) : 0
     };
   });
 }

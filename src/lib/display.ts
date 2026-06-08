@@ -1,5 +1,7 @@
 export function gameLabel(game: string) {
-  return game === "dota2" ? "Dota 2" : "CS2";
+  if (game === "dota2") return "Dota 2";
+  if (game === "football") return "Футбол";
+  return "CS2";
 }
 
 export function statusLabel(status: string) {

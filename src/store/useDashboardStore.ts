@@ -3,7 +3,7 @@
 import { create } from "zustand";
 
 type DashboardStore = {
-  game: "all" | "cs2" | "dota2";
+  game: "all" | "cs2" | "dota2" | "football";
   status: "all" | "prematch" | "live" | "finished";
   setGame: (game: DashboardStore["game"]) => void;
   setStatus: (status: DashboardStore["status"]) => void;
