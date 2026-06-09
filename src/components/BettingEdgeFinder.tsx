@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { BettingEdge, EdgeSource } from "@/src/lib/edgeFinder";
+import type { EdgeFeatureSource } from "@/src/lib/dataQuality";
 
 type UserOpinion = "Согласен с системой" | "Частично согласен" | "Не согласен";
 
@@ -60,10 +61,15 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
           matchId,
           edgeType: edge.type,
           signalStrength: edge.signalStrength,
+          systemProbability: edge.systemProbability,
           predictedOutcome: edge.predictedOutcome,
           relatedMarket: edge.oddsComparison.market,
           bookmakerOdds: edge.oddsComparison.odds || null,
-          impliedProbability: edge.oddsComparison.impliedProbability || null
+          impliedProbability: edge.oddsComparison.impliedProbability || null,
+          edgePercent: edge.edgePercent,
+          dataQualityScore: edge.dataQualityScore,
+          modelVersion: edge.modelVersion,
+          featureSnapshot: JSON.stringify(edge.featureSnapshot)
         }))
       })
     }).catch(() => {
@@ -79,10 +85,10 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
       <section className="terminal-card border-terminal-green/50 p-5 shadow-[0_18px_70px_rgba(34,197,94,0.12)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="metric-label">Betting Edge Finder v0.6</p>
+            <p className="metric-label">Betting Edge Finder v0.9</p>
             <h2 className="mt-1 text-3xl font-semibold">Найденные закономерности</h2>
             <p className="mt-2 max-w-3xl text-sm text-terminal-muted">
-              Система ищет потенциальные преимущества в матче, показывает силу сигнала и объясняет, почему она так считает.
+              Система ищет потенциальные преимущества в матче, отдельно показывает силу сигнала, вероятность модели и качество данных.
               Это не прогноз и не рекомендация к ставке. Найденные закономерности автоматически попадают в трекинг результатов.
             </p>
           </div>
@@ -90,6 +96,7 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
             <div className="min-w-[240px] rounded border border-terminal-green/30 bg-terminal-bg p-4">
               <p className="metric-label">Главный сигнал</p>
               <p className="mt-2 text-lg font-semibold">{topEdge.shortSummary}</p>
+              <p className="mt-1 text-sm text-terminal-muted">Качество данных: {topEdge.dataQualityScore}/100</p>
               <div className="mt-3 h-3 rounded bg-white/10">
                 <div className="h-3 rounded bg-terminal-green" style={{ width: `${topEdge.signalStrength}%` }} />
               </div>
@@ -116,6 +123,12 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
               </div>
               <div className="mt-3 h-2 rounded bg-white/10">
                 <div className="h-2 rounded bg-terminal-green" style={{ width: `${edge.signalStrength}%` }} />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                <MetricMini label="Вероятность системы" value={`${edge.systemProbability}%`} tone="green" />
+                <MetricMini label="Качество данных" value={`${edge.dataQualityScore}/100`} tone={edge.dataQualityScore >= 50 ? "green" : "yellow"} />
+                <MetricMini label="Вероятность рынка" value={edge.impliedProbability ? `${edge.impliedProbability}%` : "нет"} />
+                <MetricMini label="Преимущество" value={`${edge.edgePercent > 0 ? "+" : ""}${edge.edgePercent}%`} tone={edge.edgePercent > 0 ? "green" : "yellow"} />
               </div>
               <p className="mt-3 text-sm text-terminal-muted">{edge.why}</p>
             </div>
@@ -144,6 +157,13 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
                   <MiniList title="Факторы против" items={edge.factorsAgainst} tone="risk" />
                 </div>
               </div>
+              <div className="grid gap-3 border-b border-terminal-border p-4 text-sm md:grid-cols-5">
+                <MetricMini label="Сила сигнала" value={`${edge.signalStrength}%`} tone="green" />
+                <MetricMini label="Вероятность системы" value={`${edge.systemProbability}%`} tone="green" />
+                <MetricMini label="Вероятность рынка" value={edge.impliedProbability ? `${edge.impliedProbability}%` : "нет"} />
+                <MetricMini label="Преимущество" value={`${edge.edgePercent > 0 ? "+" : ""}${edge.edgePercent}%`} tone={edge.edgePercent > 0 ? "green" : "yellow"} />
+                <MetricMini label="Качество данных" value={`${edge.dataQualityScore}/100`} tone={edge.dataQualityScore >= 50 ? "green" : "yellow"} />
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[860px] text-left text-sm">
                   <thead className="text-xs uppercase text-terminal-muted">
@@ -168,6 +188,22 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
                   </tbody>
                 </table>
               </div>
+              <div className="border-t border-terminal-border p-4">
+                <p className="metric-label">Feature Snapshot · {edge.modelVersion}</p>
+                <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {edge.featureSnapshot.map((feature) => (
+                    <div key={`${edge.id}-${feature.name}`} className="rounded border border-terminal-border bg-terminal-bg p-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium">{feature.name}</p>
+                        <SourceBadge value={feature.source} />
+                      </div>
+                      <p className="mt-2 text-terminal-muted">Значение: {feature.value}</p>
+                      <p className="mt-1 text-xs text-terminal-muted">Вес: {feature.weight} · влияние: {impactLabel(feature.impact)}</p>
+                      {feature.note && <p className="mt-1 text-xs text-terminal-muted">{feature.note}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -178,7 +214,7 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
           <div className="border-b border-terminal-border p-5">
             <p className="metric-label">Подготовка к будущим коэффициентам</p>
             <h2 className="mt-1 text-2xl font-semibold">Сравнение с коэффициентами букмекеров</h2>
-            <p className="mt-2 text-sm text-terminal-muted">Пока структура работает на demo-коэффициентах. Смысл блока — увидеть расхождение между оценкой системы и ценой рынка.</p>
+            <p className="mt-2 text-sm text-terminal-muted">Теперь рынок сравнивается с вероятностью системы, а не с силой сигнала. Это база для будущей калибровки и backtesting.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[780px] text-left text-sm">
@@ -186,9 +222,11 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
                 <tr>
                   <th className="px-4 py-3">Рынок</th>
                   <th className="px-4 py-3">Коэффициент</th>
-                  <th className="px-4 py-3">Вероятность по коэффициенту</th>
-                  <th className="px-4 py-3">Сила закономерности</th>
-                  <th className="px-4 py-3">Расхождение</th>
+                  <th className="px-4 py-3">Вероятность рынка</th>
+                  <th className="px-4 py-3">Вероятность системы</th>
+                  <th className="px-4 py-3">Преимущество</th>
+                  <th className="px-4 py-3">EV</th>
+                  <th className="px-4 py-3">Качество</th>
                   <th className="px-4 py-3">Статус</th>
                 </tr>
               </thead>
@@ -198,8 +236,14 @@ export function BettingEdgeFinder({ matchId, edges }: { matchId: string; edges: 
                     <td className="px-4 py-3 font-medium">{edge.oddsComparison.market}</td>
                     <td className="px-4 py-3">{edge.oddsComparison.odds ? edge.oddsComparison.odds.toFixed(2) : "нет данных"}</td>
                     <td className="px-4 py-3">{edge.oddsComparison.impliedProbability}%</td>
-                    <td className="px-4 py-3 text-terminal-green">{edge.oddsComparison.edgeStrength}%</td>
-                    <td className="px-4 py-3 text-terminal-yellow">{edge.oddsComparison.divergence}%</td>
+                    <td className="px-4 py-3 text-terminal-green">{edge.oddsComparison.systemProbability}%</td>
+                    <td className={edge.oddsComparison.edgePercent > 0 ? "px-4 py-3 text-terminal-green" : "px-4 py-3 text-terminal-yellow"}>
+                      {edge.oddsComparison.edgePercent > 0 ? "+" : ""}{edge.oddsComparison.edgePercent}%
+                    </td>
+                    <td className={edge.oddsComparison.expectedValue > 0 ? "px-4 py-3 text-terminal-green" : "px-4 py-3 text-terminal-yellow"}>
+                      {edge.oddsComparison.expectedValue > 0 ? "+" : ""}{edge.oddsComparison.expectedValue}%
+                    </td>
+                    <td className="px-4 py-3">{edge.oddsComparison.dataQualityScore}/100</td>
                     <td className="px-4 py-3"><SourceBadge value={edge.oddsComparison.status} /></td>
                   </tr>
                 ))}
@@ -281,14 +325,33 @@ function MiniList({ title, items, tone }: { title: string; items: string[]; tone
   );
 }
 
-function SourceBadge({ value }: { value: EdgeSource }) {
+function MetricMini({ label, value, tone = "muted" }: { label: string; value: string; tone?: "green" | "yellow" | "muted" }) {
+  const valueClass = tone === "green" ? "text-terminal-green" : tone === "yellow" ? "text-terminal-yellow" : "text-terminal-text";
+  return (
+    <div className="rounded border border-terminal-border bg-terminal-bg p-3">
+      <p className="metric-label">{label}</p>
+      <p className={`mt-1 font-semibold ${valueClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function SourceBadge({ value }: { value: EdgeSource | EdgeFeatureSource }) {
   const className =
     value === "Real"
       ? "border-terminal-green/40 bg-terminal-green/10 text-terminal-green"
       : value === "Demo"
         ? "border-terminal-yellow/40 bg-terminal-yellow/10 text-terminal-yellow"
-        : "border-terminal-red/40 bg-terminal-red/10 text-terminal-red";
-  return <span className={`inline-flex rounded border px-2 py-1 text-xs font-medium ${className}`}>{value}</span>;
+        : value === "Fallback"
+          ? "border-terminal-red/40 bg-terminal-red/10 text-terminal-red"
+          : "border-terminal-red/40 bg-terminal-red/10 text-terminal-red";
+  const label = value === "Real" ? "Реальные данные" : value === "Demo" ? "Демо-данные" : value === "Fallback" ? "Fallback" : "Недостаточно данных";
+  return <span className={`inline-flex rounded border px-2 py-1 text-xs font-medium ${className}`}>{label}</span>;
+}
+
+function impactLabel(value: "positive" | "negative" | "neutral") {
+  if (value === "positive") return "за";
+  if (value === "negative") return "против";
+  return "нейтрально";
 }
 
 function buildDisagreement(edge: BettingEdge | undefined, opinion: OpinionState) {

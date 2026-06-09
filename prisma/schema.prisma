@@ -142,10 +142,15 @@ model EdgeTrackingEntry {
   matchId            String
   edgeType           String
   signalStrength     Int
+  systemProbability  Float?
   predictedOutcome   String
   relatedMarket      String
   bookmakerOdds      Float?
   impliedProbability Int?
+  edgePercent        Float?
+  dataQualityScore   Int?
+  modelVersion       String?
+  featureSnapshot    String?
   actualOutcome      String?
   status             String    @default("pending")
   profitLoss         Float?
@@ -157,4 +162,6 @@ model EdgeTrackingEntry {
   @@index([status])
   @@index([edgeType])
   @@index([signalStrength])
+  @@index([systemProbability])
+  @@index([dataQualityScore])
 }

@@ -21,10 +21,15 @@ export async function POST(request: Request) {
       matchId: edge.matchId as string,
       edgeType: edge.edgeType as string,
       signalStrength: edge.signalStrength as number,
+      systemProbability: typeof edge.systemProbability === "number" ? edge.systemProbability : null,
       predictedOutcome: edge.predictedOutcome as string,
       relatedMarket: edge.relatedMarket as string,
       bookmakerOdds: typeof edge.bookmakerOdds === "number" ? edge.bookmakerOdds : null,
-      impliedProbability: typeof edge.impliedProbability === "number" ? edge.impliedProbability : null
+      impliedProbability: typeof edge.impliedProbability === "number" ? edge.impliedProbability : null,
+      edgePercent: typeof edge.edgePercent === "number" ? edge.edgePercent : null,
+      dataQualityScore: typeof edge.dataQualityScore === "number" ? edge.dataQualityScore : null,
+      modelVersion: typeof edge.modelVersion === "string" ? edge.modelVersion : null,
+      featureSnapshot: typeof edge.featureSnapshot === "string" ? edge.featureSnapshot : null
     }));
 
   if (!edges.length) {

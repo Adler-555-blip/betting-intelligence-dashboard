@@ -122,10 +122,15 @@ CREATE TABLE IF NOT EXISTS "EdgeTrackingEntry" (
   "matchId" TEXT NOT NULL,
   "edgeType" TEXT NOT NULL,
   "signalStrength" INTEGER NOT NULL,
+  "systemProbability" REAL,
   "predictedOutcome" TEXT NOT NULL,
   "relatedMarket" TEXT NOT NULL,
   "bookmakerOdds" REAL,
   "impliedProbability" INTEGER,
+  "edgePercent" REAL,
+  "dataQualityScore" INTEGER,
+  "modelVersion" TEXT,
+  "featureSnapshot" TEXT,
   "actualOutcome" TEXT,
   "status" TEXT NOT NULL DEFAULT 'pending',
   "profitLoss" REAL,
@@ -138,3 +143,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS "EdgeTrackingEntry_matchId_edgeType_relatedMar
 CREATE INDEX IF NOT EXISTS "EdgeTrackingEntry_status_idx" ON "EdgeTrackingEntry" ("status");
 CREATE INDEX IF NOT EXISTS "EdgeTrackingEntry_edgeType_idx" ON "EdgeTrackingEntry" ("edgeType");
 CREATE INDEX IF NOT EXISTS "EdgeTrackingEntry_signalStrength_idx" ON "EdgeTrackingEntry" ("signalStrength");
+CREATE INDEX IF NOT EXISTS "EdgeTrackingEntry_systemProbability_idx" ON "EdgeTrackingEntry" ("systemProbability");
+CREATE INDEX IF NOT EXISTS "EdgeTrackingEntry_dataQualityScore_idx" ON "EdgeTrackingEntry" ("dataQualityScore");

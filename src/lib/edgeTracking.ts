@@ -7,10 +7,15 @@ export type EdgeTrackingPayload = {
   matchId: string;
   edgeType: string;
   signalStrength: number;
+  systemProbability?: number | null;
   predictedOutcome: string;
   relatedMarket: string;
   bookmakerOdds?: number | null;
   impliedProbability?: number | null;
+  edgePercent?: number | null;
+  dataQualityScore?: number | null;
+  modelVersion?: string | null;
+  featureSnapshot?: string | null;
 };
 
 export type EdgeTrackingStats = {
@@ -18,8 +23,12 @@ export type EdgeTrackingStats = {
   overall: RateSummary;
   byType: RateSummary[];
   byStrengthRange: RateSummary[];
+  bySystemProbabilityRange: RateSummary[];
+  byDataQualityRange: RateSummary[];
   bestTypes: RateSummary[];
   weakestTypes: RateSummary[];
+  averageSystemProbability: number;
+  averageDataQualityScore: number;
 };
 
 export type EdgeTrackingEntryWithMatch = EdgeTrackingEntry & {
@@ -54,18 +63,28 @@ export async function trackEdges(edges: EdgeTrackingPayload[]) {
         },
         update: {
           signalStrength: edge.signalStrength,
+          systemProbability: edge.systemProbability ?? null,
           predictedOutcome: edge.predictedOutcome,
           bookmakerOdds: edge.bookmakerOdds ?? null,
-          impliedProbability: edge.impliedProbability ?? null
+          impliedProbability: edge.impliedProbability ?? null,
+          edgePercent: edge.edgePercent ?? null,
+          dataQualityScore: edge.dataQualityScore ?? null,
+          modelVersion: edge.modelVersion ?? null,
+          featureSnapshot: edge.featureSnapshot ?? null
         },
         create: {
           matchId: edge.matchId,
           edgeType: edge.edgeType,
           signalStrength: edge.signalStrength,
+          systemProbability: edge.systemProbability ?? null,
           predictedOutcome: edge.predictedOutcome,
           relatedMarket: edge.relatedMarket,
           bookmakerOdds: edge.bookmakerOdds ?? null,
-          impliedProbability: edge.impliedProbability ?? null
+          impliedProbability: edge.impliedProbability ?? null,
+          edgePercent: edge.edgePercent ?? null,
+          dataQualityScore: edge.dataQualityScore ?? null,
+          modelVersion: edge.modelVersion ?? null,
+          featureSnapshot: edge.featureSnapshot ?? null
         }
       })
     )
@@ -106,6 +125,8 @@ export async function getEdgeTrackingStats(): Promise<EdgeTrackingStats> {
 
   const byType = summarizeGroups(groupBy(entries, (entry) => entry.edgeType));
   const byStrengthRange = summarizeGroups(groupBy(entries, (entry) => strengthRange(entry.signalStrength)));
+  const bySystemProbabilityRange = summarizeGroups(groupBy(entries, (entry) => probabilityRange(entry.systemProbability)));
+  const byDataQualityRange = summarizeGroups(groupBy(entries, (entry) => dataQualityRange(entry.dataQualityScore)));
   const rankedTypes = byType.filter((item) => item.resolved > 0).sort((a, b) => b.hitRate - a.hitRate || b.resolved - a.resolved);
 
   return {
@@ -113,8 +134,12 @@ export async function getEdgeTrackingStats(): Promise<EdgeTrackingStats> {
     overall: summarize("Все закономерности", entries),
     byType,
     byStrengthRange: sortStrengthRanges(byStrengthRange),
+    bySystemProbabilityRange: sortProbabilityRanges(bySystemProbabilityRange),
+    byDataQualityRange: sortDataQualityRanges(byDataQualityRange),
     bestTypes: rankedTypes.slice(0, 3),
-    weakestTypes: [...rankedTypes].reverse().slice(0, 3)
+    weakestTypes: [...rankedTypes].reverse().slice(0, 3),
+    averageSystemProbability: average(entries.map((entry) => entry.systemProbability)),
+    averageDataQualityScore: average(entries.map((entry) => entry.dataQualityScore))
   };
 }
 
@@ -154,7 +179,41 @@ function strengthRange(value: number) {
   return "0-49";
 }
 
+function probabilityRange(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "нет данных";
+  if (value >= 70) return "70+";
+  if (value >= 65) return "65-70";
+  if (value >= 60) return "60-65";
+  if (value >= 55) return "55-60";
+  if (value >= 50) return "50-55";
+  return "<50";
+}
+
+function dataQualityRange(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "нет данных";
+  if (value >= 75) return "75-100";
+  if (value >= 50) return "50-75";
+  if (value >= 25) return "25-50";
+  return "0-25";
+}
+
 function sortStrengthRanges(items: RateSummary[]) {
   const order = ["80-100", "65-79", "50-64", "0-49"];
   return [...items].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+}
+
+function sortProbabilityRanges(items: RateSummary[]) {
+  const order = ["70+", "65-70", "60-65", "55-60", "50-55", "<50", "нет данных"];
+  return [...items].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+}
+
+function sortDataQualityRanges(items: RateSummary[]) {
+  const order = ["75-100", "50-75", "25-50", "0-25", "нет данных"];
+  return [...items].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+}
+
+function average(values: (number | null)[]) {
+  const usable = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!usable.length) return 0;
+  return Math.round((usable.reduce((sum, value) => sum + value, 0) / usable.length) * 10) / 10;
 }

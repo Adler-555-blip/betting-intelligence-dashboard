@@ -1,9 +1,20 @@
 import type { Bookmaker, Match, OddsSnapshot, Team, Tournament } from "@prisma/client";
+import { calculateDataQualityScore, type EdgeFeature, type EdgeFeatureSource } from "./dataQuality";
 import type { MatchIntelligence, MapFactor, PlayerKillFactor } from "./matchIntelligence";
+import {
+  calculateEdgePercent,
+  calculateExpectedValue,
+  decimalOddsToImpliedProbability,
+  normalizeScoreToProbability,
+  round1
+} from "./probabilityCore";
 
 export type EdgeType = "Map Edge" | "Player Edge" | "CT/T Edge" | "Tournament Edge" | "Line Movement Edge";
 export type EdgeSource = "Real" | "Demo" | "Fallback";
 export type EdgeConfidence = "высокий" | "средний" | "низкий";
+export type { EdgeFeature };
+
+const MODEL_VERSION = "rule-based-v0.9";
 
 export type EdgeDetail = {
   factor: string;
@@ -16,7 +27,11 @@ export type EdgeDetail = {
 export type OddsComparison = {
   market: string;
   odds: number;
+  systemProbability: number;
   impliedProbability: number;
+  edgePercent: number;
+  expectedValue: number;
+  dataQualityScore: number;
   edgeStrength: number;
   divergence: number;
   status: EdgeSource;
@@ -27,6 +42,12 @@ export type BettingEdge = {
   title: string;
   type: EdgeType;
   signalStrength: number;
+  systemProbability: number;
+  impliedProbability: number;
+  edgePercent: number;
+  dataQualityScore: number;
+  modelVersion: string;
+  featureSnapshot: EdgeFeature[];
   predictedOutcome: string;
   shortSummary: string;
   why: string;
@@ -75,6 +96,12 @@ function buildMapEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
         row("Общий профиль", `${intelligence.score.teamA}%`, `${intelligence.score.teamB}%`, "fallback вместо map pool", "Fallback"),
         row("Формат", match.format, match.format, "BO1/BO3/BO5 влияет на устойчивость сигнала", "Demo"),
         row("Вероятность появления карты", "нет данных", "нет данных", "требуется реальный veto/map pool", "Fallback")
+      ],
+      featureSnapshot: [
+        feature("Общий профиль", Math.max(intelligence.score.teamA, intelligence.score.teamB), 25, "Fallback", "positive", "fallback вместо реального map pool"),
+        feature("Формат матча", match.format, 15, "Demo", "neutral", "формат влияет на дисперсию"),
+        feature("Map pool", "нет данных", 25, "Missing", "negative", "нужен реальный источник карт"),
+        feature("Veto probability", "нет данных", 25, "Missing", "negative", "нужна история veto")
       ]
     });
   }
@@ -107,6 +134,14 @@ function buildMapEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
       row("История встреч на карте", "demo 3-1", "demo 1-3", "пока имитация H2H по карте", "Demo"),
       row("Вероятность появления карты", probabilityByFormat(match.format), probabilityByFormat(match.format), "нет реального veto", "Fallback")
     ],
+    featureSnapshot: [
+      feature("Map winrate diff", diff, 30, "Demo", diff >= 8 ? "positive" : "neutral", "demo winrate по выбранной карте"),
+      feature("Sample size", `${bestMap.teamAPlayed}/${bestMap.teamBPlayed}`, 15, "Demo", "neutral", "demo количество сыгранных карт"),
+      feature("Match format", match.format, 10, "Demo", "neutral", "формат матча"),
+      feature("Side profile", bestMap.sideProfile, 15, "Demo", bestMap.sideProfile === "Balanced" ? "neutral" : "positive", "demo CT/T профиль карты"),
+      feature("Veto probability", probabilityByFormat(match.format), 20, "Fallback", "negative", "нет реальной истории veto"),
+      feature("H2H map history", "demo 3-1", 10, "Demo", "neutral", "пока имитация H2H на карте")
+    ],
     marketName: `${leader} сильнее на ${bestMap.map}`
   });
 }
@@ -133,6 +168,13 @@ function buildPlayerEdge(match: MatchForEdges, intelligence: MatchIntelligence):
         row("K/D", "нет данных", "нет данных", "нужно подключить игроков", "Fallback"),
         row("ADR", "нет данных", "нет данных", "нужно подключить игроков", "Fallback"),
         row("Отклонение от линии", "нет линии", "нет линии", "будущий рынок player props", "Fallback")
+      ],
+      featureSnapshot: [
+        feature("Общий профиль команды", leader.score, 20, "Fallback", "neutral", "fallback вместо player logs"),
+        feature("Average kills", "нет данных", 25, "Missing", "negative", "нужны player match logs"),
+        feature("K/D", "нет данных", 20, "Missing", "negative"),
+        feature("ADR", "нет данных", 20, "Missing", "negative"),
+        feature("Market line", "нет данных", 15, "Missing", "negative", "нужна линия игрока")
       ]
     });
   }
@@ -161,6 +203,14 @@ function buildPlayerEdge(match: MatchForEdges, intelligence: MatchIntelligence):
       row("ADR", playerMetric(top, match.teamA.name, "adr"), playerMetric(top, match.teamB.name, "adr"), "урон за раунд", "Demo"),
       row("Отклонение от условной линии", "+1.8 kills", "нет данных", "линия пока условная", "Fallback")
     ],
+    featureSnapshot: [
+      feature("Average kills last 10", top.avgKillsLast10, 25, "Demo", "positive", "demo player kills"),
+      feature("K/D", round1(top.kd), 20, "Demo", top.kd >= 1.1 ? "positive" : "neutral", "demo K/D"),
+      feature("ADR", round1(top.adr), 20, "Demo", top.adr >= 75 ? "positive" : "neutral", "demo ADR"),
+      feature("Stability", top.stability, 15, "Demo", top.stability === "высокая" ? "positive" : "neutral"),
+      feature("Expected rounds", "нет данных", 10, "Missing", "negative", "нужен прогноз карты/раундов"),
+      feature("Market line", "условная", 10, "Fallback", "negative", "реальной линии игрока нет")
+    ],
     marketName: `${top.nickname}: индивидуальный рынок`
   });
 }
@@ -183,6 +233,12 @@ function buildCtTEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
         row("CT round winrate", "нет данных", "нет данных", "нужно подключить карту", "Fallback"),
         row("T round winrate", "нет данных", "нет данных", "нужно подключить карту", "Fallback"),
         row("Профиль карты", "нет данных", "нет данных", "CT-sided / T-sided / Balanced", "Fallback")
+      ],
+      featureSnapshot: [
+        feature("CT round winrate", "нет данных", 30, "Missing", "negative"),
+        feature("T round winrate", "нет данных", 30, "Missing", "negative"),
+        feature("Map side profile", "нет данных", 20, "Missing", "negative"),
+        feature("Starting side", "нет данных", 20, "Missing", "negative")
       ]
     });
   }
@@ -212,6 +268,13 @@ function buildCtTEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
       row("T round winrate", `${bestMap.teamATWinrate}%`, `${bestMap.teamBTWinrate}%`, "сила T-стороны", "Demo"),
       row("Среднее число раундов за сторону", "12.4", "12.1", "demo-объем", "Demo"),
       row("CT/T баланс карты", bestMap.sideProfile, bestMap.sideProfile, "профиль карты", "Demo")
+    ],
+    featureSnapshot: [
+      feature("CT side gap", teamASideGap + teamBSideGap, 25, "Demo", "positive", "demo разница CT/T"),
+      feature("CT round winrate", `${bestMap.teamACTWinrate}/${bestMap.teamBCTWinrate}`, 20, "Demo", "neutral"),
+      feature("T round winrate", `${bestMap.teamATWinrate}/${bestMap.teamBTWinrate}`, 20, "Demo", "neutral"),
+      feature("Map side profile", bestMap.sideProfile, 20, "Demo", bestMap.sideProfile === "Balanced" ? "neutral" : "positive"),
+      feature("Starting side", "нет данных", 15, "Missing", "negative", "нужен live/fixture источник")
     ],
     marketName: `CT/T профиль ${bestMap.map}`
   });
@@ -246,6 +309,13 @@ function buildTournamentEdge(match: MatchForEdges, intelligence: MatchIntelligen
       row("Надежность статистики", reliabilityLabel(match, intelligence), reliabilityLabel(match, intelligence), "больше real-данных — выше доверие", realFootballContext ? "Real" : "Demo"),
       row("Важность", `${match.importanceScore}/100`, `${match.importanceScore}/100`, "приоритет проверки матча", "Demo")
     ],
+    featureSnapshot: [
+      feature("Tournament", match.tournament.name, 20, realFootballContext ? "Real" : "Demo", "neutral", realFootballContext ? "ручной real context" : "demo context"),
+      feature("Match format", match.format, 20, "Demo", "neutral"),
+      feature("Importance score", match.importanceScore, 20, "Demo", match.importanceScore >= 70 ? "positive" : "neutral"),
+      feature("Stage", stage, 20, realFootballContext ? "Real" : "Demo", "neutral"),
+      feature("Live news", "нет данных", 20, "Missing", "negative")
+    ],
     marketName: `Контекст ${match.tournament.name}`
   });
 }
@@ -277,6 +347,14 @@ function buildLineMovementEdge(match: MatchForEdges, intelligence: MatchIntellig
       row("Количество снимков", String(movement.snapshotCount), String(movement.snapshotCount), "надежность ряда", "Demo"),
       row("Мнение системы", `${intelligence.score.teamA}%`, `${intelligence.score.teamB}%`, "сравнение с общей оценкой", "Demo")
     ],
+    featureSnapshot: [
+      feature("Opening/current delta A", formatDelta(movement.deltaA), 25, "Demo", "neutral", "demo odds snapshots"),
+      feature("Opening/current delta B", formatDelta(movement.deltaB), 25, "Demo", "neutral", "demo odds snapshots"),
+      feature("Movement direction", leader, 15, "Demo", "positive"),
+      feature("Number of snapshots", movement.snapshotCount, 15, "Demo", movement.snapshotCount >= 4 ? "positive" : "neutral"),
+      feature("Market liquidity", "нет данных", 10, "Missing", "negative"),
+      feature("Closing line", "нет данных", 10, "Missing", "negative")
+    ],
     marketName: `${leader}: движение линии`
   });
 }
@@ -293,18 +371,29 @@ function createEdge(input: {
   source: EdgeSource;
   confidence: EdgeConfidence;
   details: EdgeDetail[];
+  featureSnapshot: EdgeFeature[];
   marketName?: string;
 }): BettingEdge {
   const odds = bestAvailableOdds(input.match.oddsSnapshots);
-  const impliedProbability = odds ? Math.round((1 / odds) * 100) : 0;
-  const edgeStrength = Math.round(input.signalStrength);
+  const impliedProbability = odds ? Math.round(decimalOddsToImpliedProbability(odds)) : 0;
+  const signalStrength = Math.round(input.signalStrength);
+  const dataQualityScore = calculateDataQualityScore(input.featureSnapshot);
+  const systemProbability = calculateSystemProbability(signalStrength, dataQualityScore, input.source);
+  const edgePercent = calculateEdgePercent(systemProbability, impliedProbability);
+  const expectedValue = calculateExpectedValue(systemProbability, odds);
   return {
     id: input.id,
     title: input.title,
     type: input.type,
-    signalStrength: edgeStrength,
+    signalStrength,
+    systemProbability,
+    impliedProbability,
+    edgePercent,
+    dataQualityScore,
+    modelVersion: MODEL_VERSION,
+    featureSnapshot: input.featureSnapshot,
     predictedOutcome: input.marketName ?? input.title,
-    shortSummary: `${input.title} — сигнал ${edgeStrength}%`,
+    shortSummary: `${input.title} — сигнал ${signalStrength}%, вероятность ${systemProbability}%`,
     why: input.why,
     factorsFor: input.factorsFor,
     factorsAgainst: input.factorsAgainst,
@@ -314,16 +403,32 @@ function createEdge(input: {
     oddsComparison: {
       market: input.marketName ?? input.title,
       odds: odds ?? 0,
+      systemProbability,
       impliedProbability,
-      edgeStrength,
-      divergence: Math.abs(edgeStrength - impliedProbability),
+      edgePercent,
+      expectedValue,
+      dataQualityScore,
+      edgeStrength: systemProbability,
+      divergence: Math.abs(edgePercent),
       status: odds ? "Demo" : "Fallback"
     }
   };
 }
 
+function calculateSystemProbability(signalStrength: number, dataQualityScore: number, source: EdgeSource) {
+  const rawProbability = normalizeScoreToProbability(signalStrength, 49, source === "Real" ? 68 : 62);
+  const qualityFactor = dataQualityScore / 100;
+  const conservativeProbability = 50 + (rawProbability - 50) * (0.28 + qualityFactor * 0.62);
+  const maxByQuality = dataQualityScore < 25 ? 56 : dataQualityScore < 50 ? 60 : dataQualityScore < 75 ? 65 : 72;
+  return round1(Math.min(conservativeProbability, maxByQuality));
+}
+
 function row(factor: string, teamA: string, teamB: string, impact: string, source: EdgeSource): EdgeDetail {
   return { factor, teamA, teamB, impact, source };
+}
+
+function feature(name: string, value: string | number, weight: number, source: EdgeFeatureSource, impact: EdgeFeature["impact"], note?: string): EdgeFeature {
+  return { name, value, weight, source, impact, note };
 }
 
 function strongestMap(maps: MapFactor[]) {
