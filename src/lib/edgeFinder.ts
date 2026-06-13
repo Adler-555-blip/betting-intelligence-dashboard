@@ -115,6 +115,7 @@ function buildMapEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
   const source = mapEdgeSource(bestMap);
   const sampleSize = bestMap.sampleSize ?? bestMap.teamAPlayed + bestMap.teamBPlayed;
   const missing = bestMap.missing ?? ["veto"];
+  const mapQuality = bestMap.dataQualityScore ?? 0;
   const strength = clamp(45 + diff * 0.55 + formatBonus + Math.min(sampleSize, 24) * 0.45);
 
   return createEdge({
@@ -129,6 +130,7 @@ function buildMapEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
       `${match.teamB.name} winrate ${bestMap.map}: ${bestMap.teamBWinrate}%`,
       `Разница winrate: ${diff}%`,
       `Sample size: ${sampleSize} карт`,
+      `Data Quality: ${mapQuality}/100`,
       `Формат матча: ${match.format}`,
       `Источник: ${bestMap.source}`
     ],
@@ -138,6 +140,9 @@ function buildMapEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
     details: [
       row("Winrate на карте", `${bestMap.teamAWinrate}%`, `${bestMap.teamBWinrate}%`, `разница ${diff}%`, source),
       row("Сыграно карт", String(bestMap.teamAPlayed), String(bestMap.teamBPlayed), `sample size ${sampleSize}`, source),
+      row("Частота карты", `${bestMap.frequency ?? 0}%`, `${bestMap.frequency ?? 0}%`, "доля карты в provider snapshot", source),
+      row("Последние результаты", bestMap.recentResults?.[0] ?? "нет данных", bestMap.recentResults?.[1] ?? "нет данных", "последние карты из Liquipedia snapshot", source),
+      row("Data Quality", `${mapQuality}/100`, `${mapQuality}/100`, "source + sample size + freshness, capped by missing veto", source),
       row("Источник данных", bestMap.source, bestMap.source, "manual snapshot, не live API", source),
       row("Недостающие данные", missing.join(", "), missing.join(", "), "ограничивает качество Map Edge", "Missing"),
       row("Вероятность появления карты", probabilityByFormat(match.format), probabilityByFormat(match.format), "нет реального veto", "Fallback")
@@ -145,6 +150,8 @@ function buildMapEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
     featureSnapshot: [
       feature("Map winrate diff", diff, 28, edgeFeatureSource(source), diff >= 8 ? "positive" : "neutral", bestMap.source),
       feature("Sample size", sampleSize, 22, edgeFeatureSource(source), sampleSize >= 18 ? "positive" : "neutral", `${bestMap.teamAPlayed}/${bestMap.teamBPlayed} сыграно карт`),
+      feature("Map Data Quality", mapQuality, 18, edgeFeatureSource(source), mapQuality >= 70 ? "positive" : "neutral", "Liquipedia profile quality"),
+      feature("Recent map form", bestMap.recentResults?.join(" | ") ?? "нет данных", 12, edgeFeatureSource(source), "neutral", "последние результаты по карте"),
       feature("Match format", match.format, 10, "Demo", "neutral", "формат матча"),
       feature("Source URL", bestMap.source, 10, edgeFeatureSource(source), "neutral", "provider provenance"),
       feature("Map pool", bestMap.map, 10, edgeFeatureSource(source), "neutral", "manual snapshot map pool"),

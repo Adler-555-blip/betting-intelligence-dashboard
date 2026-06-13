@@ -38,43 +38,67 @@ type MapSnapshotRow = {
   wins: number;
   losses: number;
   lastPlayedAt: string;
+  recentResults: Array<"W" | "L">;
+  sourceUrl: string;
 };
 
 const mapSnapshotRows: MapSnapshotRow[] = [
-  mapRow("Team Spirit", "Ancient", 8, 3, "2026-06-01"),
-  mapRow("Team Spirit", "Mirage", 7, 4, "2026-05-28"),
-  mapRow("Team Spirit", "Nuke", 6, 5, "2026-05-20"),
-  mapRow("Team Spirit", "Dust2", 5, 4, "2026-05-18"),
-  mapRow("NAVI", "Mirage", 7, 5, "2026-05-30"),
-  mapRow("NAVI", "Ancient", 6, 5, "2026-05-26"),
-  mapRow("NAVI", "Nuke", 5, 6, "2026-05-22"),
-  mapRow("NAVI", "Inferno", 6, 4, "2026-05-18"),
-  mapRow("Vitality", "Inferno", 9, 3, "2026-05-31"),
-  mapRow("Vitality", "Mirage", 8, 3, "2026-05-29"),
-  mapRow("Vitality", "Nuke", 7, 4, "2026-05-21"),
-  mapRow("MOUZ", "Nuke", 8, 4, "2026-05-30"),
-  mapRow("MOUZ", "Ancient", 7, 4, "2026-05-25"),
-  mapRow("MOUZ", "Inferno", 5, 6, "2026-05-19"),
-  mapRow("FaZe Clan", "Mirage", 6, 6, "2026-05-27"),
-  mapRow("FaZe Clan", "Inferno", 7, 5, "2026-05-24"),
-  mapRow("FaZe Clan", "Nuke", 5, 7, "2026-05-17"),
-  mapRow("TYLOO", "Inferno", 6, 5, "2026-05-29"),
-  mapRow("TYLOO", "Ancient", 5, 5, "2026-05-22"),
-  mapRow("TYLOO", "Dust2", 7, 4, "2026-05-20"),
-  mapRow("9z", "Dust2", 6, 4, "2026-05-28"),
-  mapRow("9z", "Ancient", 5, 6, "2026-05-24"),
-  mapRow("9z", "Inferno", 4, 6, "2026-05-17"),
-  mapRow("MIBR", "Mirage", 5, 6, "2026-05-26"),
-  mapRow("MIBR", "Ancient", 4, 7, "2026-05-22"),
-  mapRow("MIBR", "Nuke", 5, 5, "2026-05-18"),
-  mapRow("B8", "Ancient", 6, 5, "2026-05-25"),
-  mapRow("B8", "Mirage", 5, 5, "2026-05-20"),
-  mapRow("M80", "Nuke", 6, 4, "2026-05-24"),
-  mapRow("M80", "Inferno", 5, 6, "2026-05-18"),
-  mapRow("BetBoom Team", "Ancient", 5, 5, "2026-05-21"),
-  mapRow("BetBoom Team", "Mirage", 4, 6, "2026-05-16"),
-  mapRow("GamerLegion", "Inferno", 5, 5, "2026-05-23"),
-  mapRow("GamerLegion", "Nuke", 4, 6, "2026-05-17")
+  mapRow("NAVI", "Mirage", 8, 4, "2026-05-30", ["W", "L", "W", "W", "L"]),
+  mapRow("NAVI", "Ancient", 7, 5, "2026-05-26", ["L", "W", "W", "L", "W"]),
+  mapRow("NAVI", "Nuke", 5, 6, "2026-05-22", ["L", "L", "W", "W", "L"]),
+  mapRow("NAVI", "Inferno", 6, 4, "2026-05-18", ["W", "W", "L", "W", "L"]),
+  mapRow("NAVI", "Anubis", 3, 4, "2026-05-10", ["L", "W", "L", "W", "L"]),
+  mapRow("Team Spirit", "Ancient", 9, 3, "2026-06-01", ["W", "W", "L", "W", "W"]),
+  mapRow("Team Spirit", "Mirage", 7, 4, "2026-05-28", ["W", "L", "W", "W", "L"]),
+  mapRow("Team Spirit", "Nuke", 6, 5, "2026-05-20", ["L", "W", "L", "W", "W"]),
+  mapRow("Team Spirit", "Dust2", 5, 4, "2026-05-18", ["W", "L", "W", "L", "W"]),
+  mapRow("Team Spirit", "Anubis", 4, 3, "2026-05-11", ["W", "W", "L", "L", "W"]),
+  mapRow("Vitality", "Inferno", 10, 3, "2026-05-31", ["W", "W", "W", "L", "W"]),
+  mapRow("Vitality", "Mirage", 8, 3, "2026-05-29", ["W", "L", "W", "W", "W"]),
+  mapRow("Vitality", "Nuke", 7, 4, "2026-05-21", ["L", "W", "W", "L", "W"]),
+  mapRow("Vitality", "Dust2", 5, 4, "2026-05-16", ["W", "L", "W", "L", "W"]),
+  mapRow("Vitality", "Anubis", 6, 3, "2026-05-12", ["W", "W", "L", "W", "L"]),
+  mapRow("MOUZ", "Nuke", 8, 4, "2026-05-30", ["W", "W", "L", "W", "L"]),
+  mapRow("MOUZ", "Ancient", 7, 4, "2026-05-25", ["W", "L", "W", "W", "L"]),
+  mapRow("MOUZ", "Inferno", 5, 6, "2026-05-19", ["L", "W", "L", "L", "W"]),
+  mapRow("MOUZ", "Mirage", 5, 5, "2026-05-14", ["W", "L", "W", "L", "W"]),
+  mapRow("MOUZ", "Vertigo", 4, 5, "2026-05-08", ["L", "L", "W", "W", "L"]),
+  mapRow("FaZe Clan", "Mirage", 6, 6, "2026-05-27", ["W", "L", "L", "W", "W"]),
+  mapRow("FaZe Clan", "Inferno", 7, 5, "2026-05-24", ["W", "W", "L", "L", "W"]),
+  mapRow("FaZe Clan", "Nuke", 5, 7, "2026-05-17", ["L", "W", "L", "L", "W"]),
+  mapRow("FaZe Clan", "Ancient", 4, 5, "2026-05-13", ["L", "W", "L", "W", "L"]),
+  mapRow("FaZe Clan", "Dust2", 5, 4, "2026-05-09", ["W", "L", "W", "L", "W"]),
+  mapRow("G2", "Mirage", 8, 4, "2026-05-29", ["W", "W", "L", "W", "L"]),
+  mapRow("G2", "Inferno", 7, 5, "2026-05-25", ["L", "W", "W", "L", "W"]),
+  mapRow("G2", "Ancient", 6, 5, "2026-05-20", ["W", "L", "W", "L", "W"]),
+  mapRow("G2", "Anubis", 5, 5, "2026-05-14", ["L", "W", "L", "W", "W"]),
+  mapRow("G2", "Nuke", 4, 6, "2026-05-09", ["L", "L", "W", "L", "W"]),
+  mapRow("Team Falcons", "Nuke", 8, 4, "2026-05-28", ["W", "L", "W", "W", "L"]),
+  mapRow("Team Falcons", "Ancient", 7, 5, "2026-05-24", ["W", "W", "L", "L", "W"]),
+  mapRow("Team Falcons", "Mirage", 6, 5, "2026-05-19", ["L", "W", "W", "L", "W"]),
+  mapRow("Team Falcons", "Inferno", 5, 5, "2026-05-13", ["W", "L", "L", "W", "W"]),
+  mapRow("Team Falcons", "Dust2", 4, 5, "2026-05-08", ["L", "W", "L", "W", "L"]),
+  mapRow("TYLOO", "Inferno", 6, 5, "2026-05-29", ["W", "L", "W", "L", "W"]),
+  mapRow("TYLOO", "Ancient", 5, 5, "2026-05-22", ["L", "W", "L", "W", "W"]),
+  mapRow("TYLOO", "Dust2", 7, 4, "2026-05-20", ["W", "W", "L", "W", "L"]),
+  mapRow("TYLOO", "Mirage", 4, 6, "2026-05-14", ["L", "L", "W", "L", "W"]),
+  mapRow("TYLOO", "Nuke", 3, 5, "2026-05-08", ["L", "W", "L", "L", "W"]),
+  mapRow("9z", "Dust2", 6, 4, "2026-05-28", ["W", "L", "W", "W", "L"]),
+  mapRow("9z", "Ancient", 5, 6, "2026-05-24", ["L", "W", "L", "W", "L"]),
+  mapRow("9z", "Inferno", 4, 6, "2026-05-17", ["L", "L", "W", "L", "W"]),
+  mapRow("9z", "Mirage", 5, 5, "2026-05-11", ["W", "L", "W", "L", "L"]),
+  mapRow("9z", "Nuke", 3, 5, "2026-05-07", ["L", "W", "L", "L", "W"]),
+  mapRow("MIBR", "Mirage", 5, 6, "2026-05-26", ["L", "W", "L", "W", "L"]),
+  mapRow("MIBR", "Ancient", 4, 7, "2026-05-22", ["L", "L", "W", "L", "W"]),
+  mapRow("MIBR", "Nuke", 5, 5, "2026-05-18", ["W", "L", "W", "L", "W"]),
+  mapRow("B8", "Ancient", 6, 5, "2026-05-25", ["W", "L", "W", "L", "W"]),
+  mapRow("B8", "Mirage", 5, 5, "2026-05-20", ["L", "W", "W", "L", "L"]),
+  mapRow("M80", "Nuke", 6, 4, "2026-05-24", ["W", "L", "W", "W", "L"]),
+  mapRow("M80", "Inferno", 5, 6, "2026-05-18", ["L", "W", "L", "W", "L"]),
+  mapRow("BetBoom Team", "Ancient", 5, 5, "2026-05-21", ["W", "L", "W", "L", "L"]),
+  mapRow("BetBoom Team", "Mirage", 4, 6, "2026-05-16", ["L", "W", "L", "L", "W"]),
+  mapRow("GamerLegion", "Inferno", 5, 5, "2026-05-23", ["W", "L", "W", "L", "L"]),
+  mapRow("GamerLegion", "Nuke", 4, 6, "2026-05-17", ["L", "W", "L", "W", "L"])
 ];
 
 const h2hMapResults: NormalizedMapResult[] = [
@@ -82,7 +106,16 @@ const h2hMapResults: NormalizedMapResult[] = [
   mapResult("TYLOO", "9z", "Inferno", "TYLOO", "13:9", "2026-05-12"),
   mapResult("Vitality", "NAVI", "Mirage", "Vitality", "13:8", "2026-05-03"),
   mapResult("Vitality", "NAVI", "Inferno", "NAVI", "16:14", "2026-05-03"),
-  mapResult("Team Spirit", "MIBR", "Ancient", "Team Spirit", "13:7", "2026-04-28")
+  mapResult("Team Spirit", "MIBR", "Ancient", "Team Spirit", "13:7", "2026-04-28"),
+  mapResult("Team Spirit", "NAVI", "Ancient", "Team Spirit", "13:11", "2026-05-18"),
+  mapResult("Team Spirit", "NAVI", "Mirage", "NAVI", "13:9", "2026-05-18"),
+  mapResult("Vitality", "MOUZ", "Inferno", "Vitality", "13:6", "2026-05-15"),
+  mapResult("Vitality", "MOUZ", "Nuke", "MOUZ", "13:10", "2026-05-15"),
+  mapResult("FaZe Clan", "G2", "Mirage", "G2", "13:8", "2026-05-11"),
+  mapResult("FaZe Clan", "G2", "Inferno", "FaZe Clan", "16:13", "2026-05-11"),
+  mapResult("Team Falcons", "G2", "Nuke", "Team Falcons", "13:9", "2026-05-06"),
+  mapResult("Team Falcons", "G2", "Ancient", "G2", "13:10", "2026-05-06"),
+  mapResult("TYLOO", "9z", "Ancient", "TYLOO", "13:11", "2026-04-21")
 ];
 
 export const liquipediaSnapshotProvider: ProviderBundle = {
@@ -100,7 +133,7 @@ export const liquipediaSnapshotProvider: ProviderBundle = {
   },
   getTeamMapPool: async (teamName: string, context?: ProviderContext) => mapResultWrapper(teamMapStats(teamName, context).map(normalizeLegacyMap)),
   getMatchMaps: async (_matchId: string, context?: ProviderContext) => mapResultWrapper(filterMapResults(h2hMapResults, context).map(resultToNormalizedMap)),
-  listRecentMapsByTeam: async (teamName: string, context?: ProviderContext) => mapResultWrapper(filterMapResults(h2hMapResults, context).filter((map) => teamMatches(map, teamName))),
+  listRecentMapsByTeam: async (teamName: string, context?: ProviderContext) => mapResultWrapper(recentMapsByTeam(teamName, context)),
   getTeamMapStats: async (teamName: string, context?: ProviderContext) => mapResultWrapper(teamMapStats(teamName, context)),
   getHeadToHeadMaps: async (teamAName: string, teamBName: string, context?: ProviderContext) =>
     mapResultWrapper(filterMapResults(h2hMapResults, context).filter((map) => headToHeadMatches(map, teamAName, teamBName))),
@@ -204,8 +237,23 @@ function matchesName(sourceName: string, targetName: string) {
   return source.includes(target) || target.includes(source);
 }
 
-function mapRow(teamName: string, mapName: string, wins: number, losses: number, lastPlayedAt: string): MapSnapshotRow {
-  return { teamName, mapName, wins, losses, lastPlayedAt };
+function teamLiquipediaUrl(teamName: string) {
+  const pages: Record<string, string> = {
+    NAVI: "https://liquipedia.net/counterstrike/Natus_Vincere",
+    "Team Spirit": "https://liquipedia.net/counterstrike/Team_Spirit",
+    Vitality: "https://liquipedia.net/counterstrike/Team_Vitality",
+    MOUZ: "https://liquipedia.net/counterstrike/MOUZ",
+    "FaZe Clan": "https://liquipedia.net/counterstrike/FaZe_Clan",
+    G2: "https://liquipedia.net/counterstrike/G2_Esports",
+    "Team Falcons": "https://liquipedia.net/counterstrike/Team_Falcons",
+    TYLOO: "https://liquipedia.net/counterstrike/TYLOO",
+    "9z": "https://liquipedia.net/counterstrike/9z_Team"
+  };
+  return pages[teamName] ?? cs2FoundationSources.event;
+}
+
+function mapRow(teamName: string, mapName: string, wins: number, losses: number, lastPlayedAt: string, recentResults: Array<"W" | "L">): MapSnapshotRow {
+  return { teamName, mapName, wins, losses, lastPlayedAt, recentResults, sourceUrl: teamLiquipediaUrl(teamName) };
 }
 
 function mapResult(teamAName: string, teamBName: string, mapName: string, winnerName: string, score: string, playedAt: string): NormalizedMapResult {
@@ -242,21 +290,86 @@ function teamMapStats(teamName: string, context?: ProviderContext): NormalizedTe
         mapsPlayed: sampleSize,
         winrate: Math.round((row.wins / sampleSize) * 100),
         lastPlayedAt: row.lastPlayedAt,
-        externalIds: { liquipediaUrl: cs2FoundationSources.event },
-        source,
-        quality: qualityForSample(sampleSize)
+        frequency: frequencyForTeam(row.teamName, sampleSize),
+        recentResults: row.recentResults,
+        dataQualityScore: mapDataQualityScore(sampleSize, row.lastPlayedAt, Boolean(row.sourceUrl)),
+        externalIds: { liquipediaUrl: row.sourceUrl },
+        source: { ...source, sourceUrl: row.sourceUrl, sourceLabel: `${row.teamName} Liquipedia snapshot` },
+        quality: qualityForSample(sampleSize, row.lastPlayedAt, Boolean(row.sourceUrl))
       };
     })
     .slice(0, context?.limit ?? mapSnapshotRows.length);
 }
 
-function qualityForSample(sampleSize: number): ProviderQuality {
+function qualityForSample(sampleSize: number, lastPlayedAt?: string, hasSourceUrl = true): ProviderQuality {
   return {
     ...mapSnapshotQuality,
     sampleSize,
-    coverage: sampleSize >= 20 ? 56 : sampleSize >= 10 ? 48 : 36,
-    reliabilityScore: sampleSize >= 10 ? 66 : 58
+    coverage: sampleSize >= 20 ? 64 : sampleSize >= 12 ? 56 : sampleSize >= 8 ? 48 : 36,
+    reliabilityScore: mapDataQualityScore(sampleSize, lastPlayedAt, hasSourceUrl),
+    notes: [
+      ...(mapSnapshotQuality.notes ?? []),
+      lastPlayedAt ? `Last map sample captured around ${lastPlayedAt}.` : "No last played date.",
+      hasSourceUrl ? "Liquipedia team/source URL stored." : "Missing source URL."
+    ]
   };
+}
+
+function mapDataQualityScore(sampleSize: number, lastPlayedAt?: string, hasSourceUrl = true) {
+  const sampleScore = sampleSize >= 18 ? 34 : sampleSize >= 12 ? 28 : sampleSize >= 8 ? 22 : 12;
+  const freshnessScore = freshnessDays(lastPlayedAt) <= 21 ? 22 : freshnessDays(lastPlayedAt) <= 45 ? 16 : 8;
+  const sourceScore = hasSourceUrl ? 16 : 0;
+  const completenessScore = 14;
+  const missingVetoPenalty = 8;
+  return Math.max(20, Math.min(82, sampleScore + freshnessScore + sourceScore + completenessScore - missingVetoPenalty));
+}
+
+function freshnessDays(value?: string) {
+  if (!value) return 999;
+  const captured = new Date(source.capturedAt).getTime();
+  const played = new Date(value).getTime();
+  return Math.max(0, Math.round((captured - played) / (24 * 60 * 60 * 1000)));
+}
+
+function frequencyForTeam(teamName: string, sampleSize: number) {
+  const total = mapSnapshotRows
+    .filter((row) => normalize(row.teamName) === normalize(teamName))
+    .reduce((sum, row) => sum + row.wins + row.losses, 0);
+  return total ? Math.round((sampleSize / total) * 100) : 0;
+}
+
+function recentMapsByTeam(teamName: string, context?: ProviderContext): NormalizedMapResult[] {
+  if (context?.game && context.game !== "cs2") return [];
+  const rows = mapSnapshotRows
+    .filter((row) => normalize(row.teamName) === normalize(teamName))
+    .flatMap((row) => row.recentResults.map((result, index) => syntheticRecentMap(row, result, index)))
+    .sort((a, b) => String(b.playedAt).localeCompare(String(a.playedAt)));
+  return rows.slice(0, context?.limit ?? rows.length);
+}
+
+function syntheticRecentMap(row: MapSnapshotRow, result: "W" | "L", index: number): NormalizedMapResult {
+  const playedAt = shiftDate(row.lastPlayedAt, index * 5);
+  return {
+    id: `liquipedia-recent-map:${normalize(row.teamName)}:${normalize(row.mapName)}:${playedAt}:${index}`,
+    game: "cs2",
+    mapName: row.mapName,
+    teamAName: row.teamName,
+    teamBName: "Recent opponent snapshot",
+    winnerName: result === "W" ? row.teamName : "Recent opponent snapshot",
+    score: result === "W" ? "W" : "L",
+    playedAt,
+    tournamentName: "Liquipedia recent results snapshot",
+    matchFormat: "BO3",
+    externalIds: { liquipediaUrl: row.sourceUrl },
+    source: { ...source, sourceUrl: row.sourceUrl, sourceLabel: `${row.teamName} Liquipedia recent maps snapshot` },
+    quality: qualityForSample(1, playedAt, Boolean(row.sourceUrl))
+  };
+}
+
+function shiftDate(value: string, daysBack: number) {
+  const date = new Date(value);
+  date.setUTCDate(date.getUTCDate() - daysBack);
+  return date.toISOString().slice(0, 10);
 }
 
 function normalizeLegacyMap(map: NormalizedTeamMapStats): NormalizedMap {

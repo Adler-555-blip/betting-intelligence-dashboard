@@ -1,9 +1,10 @@
 import type { Match, OddsSnapshot, Team } from "@prisma/client";
 import { cs2FoundationSources } from "./cs2RealData";
+import { buildTeamMapProfile, type TeamMapProfile } from "./mapIntelligence";
 import { hltvSnapshotProvider } from "./providers/hltvProvider";
 import { liquipediaSnapshotProvider } from "./providers/liquipediaProvider";
 import { getOpenDotaTeamFactors } from "./providers/opendotaProvider";
-import type { NormalizedPlayer, NormalizedTeam, NormalizedTeamMapStats } from "./providers/normalized";
+import type { NormalizedPlayer, NormalizedTeam } from "./providers/normalized";
 
 export type DataBadge = "real" | "partial" | "snapshot" | "demo" | "missing" | "insufficient";
 
@@ -42,6 +43,9 @@ export type MapFactor = {
   badge: DataBadge;
   sampleSize?: number;
   missing?: string[];
+  frequency?: number;
+  recentResults?: string[];
+  dataQualityScore?: number;
 };
 
 export type TeamRatingFactor = {
@@ -318,26 +322,27 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
 }
 
 async function providerCs2Maps(teamA: string, teamB: string): Promise<MapFactor[]> {
-  const [teamAStats, teamBStats, h2hMaps] = await Promise.all([
-    liquipediaSnapshotProvider.getTeamMapStats?.(teamA, { game: "cs2" }),
-    liquipediaSnapshotProvider.getTeamMapStats?.(teamB, { game: "cs2" }),
+  const [teamAProfile, teamBProfile, h2hMaps] = await Promise.all([
+    buildTeamMapProfile(teamA),
+    buildTeamMapProfile(teamB),
     liquipediaSnapshotProvider.getHeadToHeadMaps?.(teamA, teamB, { game: "cs2" })
   ]);
-  const maps = buildProviderMapFactors(teamAStats?.data ?? [], teamBStats?.data ?? [], h2hMaps?.data.length ?? 0);
+  const maps = buildProviderMapFactors(teamAProfile, teamBProfile, h2hMaps?.data.length ?? 0);
   return maps.length ? maps : fallbackMaps(teamA, teamB);
 }
 
-function buildProviderMapFactors(teamAStats: NormalizedTeamMapStats[], teamBStats: NormalizedTeamMapStats[], h2hSampleSize: number): MapFactor[] {
-  const mapNames = new Set([...teamAStats.map((item) => item.mapName), ...teamBStats.map((item) => item.mapName)]);
+function buildProviderMapFactors(teamAProfile: TeamMapProfile, teamBProfile: TeamMapProfile, h2hSampleSize: number): MapFactor[] {
+  const mapNames = new Set([...teamAProfile.maps.map((item) => item.mapName), ...teamBProfile.maps.map((item) => item.mapName)]);
   return [...mapNames].map((mapName) => {
-    const teamA = teamAStats.find((item) => item.mapName === mapName);
-    const teamB = teamBStats.find((item) => item.mapName === mapName);
+    const teamA = teamAProfile.maps.find((item) => item.mapName === mapName);
+    const teamB = teamBProfile.maps.find((item) => item.mapName === mapName);
     const teamAWinrate = teamA?.winrate ?? 0;
     const teamBWinrate = teamB?.winrate ?? 0;
-    const teamAPlayed = teamA?.mapsPlayed ?? 0;
-    const teamBPlayed = teamB?.mapsPlayed ?? 0;
+    const teamAPlayed = teamA?.matchesPlayed ?? 0;
+    const teamBPlayed = teamB?.matchesPlayed ?? 0;
     const sampleSize = teamAPlayed + teamBPlayed;
-    const badge: DataBadge = sampleSize >= 18 && teamA && teamB ? "partial" : "snapshot";
+    const averageQuality = Math.round(((teamA?.dataQualityScore ?? 0) + (teamB?.dataQualityScore ?? 0)) / (teamA && teamB ? 2 : 1));
+    const badge: DataBadge = sampleSize >= 18 && averageQuality >= 70 && teamA && teamB ? "partial" : "snapshot";
     const missing = ["veto", "CT/T", "live recent maps"].concat(h2hSampleSize ? [] : ["H2H map history"]);
 
     return {
@@ -353,10 +358,16 @@ function buildProviderMapFactors(teamAStats: NormalizedTeamMapStats[], teamBStat
       strongerSide: "Balanced",
       sideProfile: "Balanced",
       advantage: Math.abs(teamAWinrate - teamBWinrate) < 5 ? "even" : teamAWinrate > teamBWinrate ? "teamA" : "teamB",
-      source: `Liquipedia Snapshot Provider: ${cs2FoundationSources.event}`,
+      source: `Liquipedia Snapshot Provider: ${teamA?.sourceUrl ?? teamB?.sourceUrl ?? cs2FoundationSources.event}`,
       badge,
       sampleSize,
-      missing
+      missing,
+      frequency: Math.max(teamA?.frequency ?? 0, teamB?.frequency ?? 0),
+      recentResults: [
+        `${teamAProfile.teamName}: ${teamA?.recentResults.join("-") || "нет данных"}`,
+        `${teamBProfile.teamName}: ${teamB?.recentResults.join("-") || "нет данных"}`
+      ],
+      dataQualityScore: averageQuality
     };
   });
 }

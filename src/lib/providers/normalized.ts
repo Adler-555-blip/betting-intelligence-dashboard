@@ -123,6 +123,9 @@ export type NormalizedTeamMapStats = ProviderEntityBase & {
   mapsPlayed: number;
   winrate: number;
   lastPlayedAt?: string;
+  frequency?: number;
+  recentResults?: Array<"W" | "L">;
+  dataQualityScore?: number;
 };
 
 export type NormalizedMapPool = ProviderEntityBase & {
