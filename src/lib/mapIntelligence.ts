@@ -16,6 +16,8 @@ export type MapPoolEntry = {
   sampleSize: number;
   freshness: string;
   dataQualityScore: number;
+  capturedAt?: string;
+  verificationStatus?: "verified" | "manual" | "unverified";
 };
 
 export type TeamMapProfile = {
@@ -117,7 +119,9 @@ function mapPoolEntry(map: NormalizedTeamMapStats, recentMaps: NormalizedMapResu
     sourceUrl: map.source.sourceUrl,
     sampleSize: map.quality.sampleSize ?? map.mapsPlayed,
     freshness: map.quality.freshness,
-    dataQualityScore: map.dataQualityScore ?? map.quality.reliabilityScore
+    dataQualityScore: map.dataQualityScore ?? map.quality.reliabilityScore,
+    capturedAt: map.capturedAt,
+    verificationStatus: map.verificationStatus
   };
 }
 

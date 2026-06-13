@@ -126,6 +126,8 @@ export type NormalizedTeamMapStats = ProviderEntityBase & {
   frequency?: number;
   recentResults?: Array<"W" | "L">;
   dataQualityScore?: number;
+  capturedAt?: string;
+  verificationStatus?: "verified" | "manual" | "unverified";
 };
 
 export type NormalizedMapPool = ProviderEntityBase & {
