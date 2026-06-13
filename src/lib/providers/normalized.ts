@@ -13,7 +13,7 @@ export type ProviderName =
 export type SourceType = "manual_snapshot" | "api" | "demo" | "fallback";
 export type Freshness = "live" | "daily" | "weekly" | "snapshot" | "stale" | "unknown";
 export type CostTier = "free" | "free_with_limits" | "paid" | "enterprise" | "internal";
-export type DataKind = "real" | "demo" | "fallback" | "missing";
+export type DataKind = "real" | "partial" | "snapshot" | "demo" | "fallback" | "missing";
 
 export type DataSourceReference = {
   providerName: ProviderName;
@@ -100,6 +100,37 @@ export type NormalizedMap = ProviderEntityBase & {
   teamBCTWinrate?: number;
   teamBTWinrate?: number;
   mapsPlayed?: number;
+};
+
+export type NormalizedMapResult = ProviderEntityBase & {
+  game: "cs2";
+  mapName: string;
+  teamAName: string;
+  teamBName: string;
+  winnerName?: string;
+  score?: string;
+  playedAt?: string;
+  tournamentName?: string;
+  matchFormat?: string;
+};
+
+export type NormalizedTeamMapStats = ProviderEntityBase & {
+  game: "cs2";
+  teamName: string;
+  mapName: string;
+  wins: number;
+  losses: number;
+  mapsPlayed: number;
+  winrate: number;
+  lastPlayedAt?: string;
+};
+
+export type NormalizedMapPool = ProviderEntityBase & {
+  game: "cs2";
+  teamName: string;
+  maps: NormalizedTeamMapStats[];
+  sampleSize: number;
+  generatedFrom: "manual_snapshot" | "provider_results" | "fallback";
 };
 
 export type NormalizedOddsSnapshot = ProviderEntityBase & {

@@ -76,6 +76,8 @@ export function buildTournamentFeatureSnapshot(tournament: NormalizedTournament 
 
 export function sourceFromQuality(quality: ProviderQuality): EdgeFeatureSource {
   if (quality.dataKind === "real") return "Real";
+  if (quality.dataKind === "partial") return "Partial";
+  if (quality.dataKind === "snapshot") return "Snapshot";
   if (quality.dataKind === "demo") return "Demo";
   if (quality.dataKind === "fallback") return "Fallback";
   return "Missing";

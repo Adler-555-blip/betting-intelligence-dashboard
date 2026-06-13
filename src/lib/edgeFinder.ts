@@ -12,7 +12,7 @@ import { liquipediaSnapshotProvider } from "./providers/liquipediaProvider";
 import { buildTournamentFeatureSnapshot, sourceFromQuality } from "./providers/probabilityCompatibility";
 
 export type EdgeType = "Map Edge" | "Player Edge" | "CT/T Edge" | "Tournament Edge" | "Line Movement Edge";
-export type EdgeSource = "Real" | "Demo" | "Fallback";
+export type EdgeSource = "Real" | "Partial" | "Snapshot" | "Demo" | "Fallback" | "Missing";
 export type EdgeConfidence = "высокий" | "средний" | "низкий";
 export type { EdgeFeature };
 
@@ -110,10 +110,12 @@ function buildMapEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
   }
 
   const leader = bestMap.advantage === "teamB" ? match.teamB.name : match.teamA.name;
-  const opponent = bestMap.advantage === "teamB" ? match.teamA.name : match.teamB.name;
   const diff = Math.abs(bestMap.teamAWinrate - bestMap.teamBWinrate);
   const formatBonus = match.format === "BO3" ? 8 : match.format === "BO5" ? 10 : 3;
-  const strength = clamp(48 + diff * 0.65 + formatBonus + (bestMap.sideProfile === "Balanced" ? 0 : 5));
+  const source = mapEdgeSource(bestMap);
+  const sampleSize = bestMap.sampleSize ?? bestMap.teamAPlayed + bestMap.teamBPlayed;
+  const missing = bestMap.missing ?? ["veto"];
+  const strength = clamp(45 + diff * 0.55 + formatBonus + Math.min(sampleSize, 24) * 0.45);
 
   return createEdge({
     match,
@@ -121,31 +123,36 @@ function buildMapEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
     title: `Преимущество ${leader} на ${bestMap.map}`,
     type: "Map Edge",
     signalStrength: strength,
-    why: `${leader} имеет более сильный demo-профиль на ${bestMap.map}, а формат ${match.format} делает фактор карты заметным для оценки матча.`,
+    why: `${leader} имеет более сильный ${source === "Demo" ? "demo" : "snapshot"}-профиль на ${bestMap.map}. Это Partial Map Edge: он учитывает историю карт, winrate, sample size и рейтинг, но не содержит veto, CT/T и player stats.`,
     factorsFor: [
       `${match.teamA.name} winrate ${bestMap.map}: ${bestMap.teamAWinrate}%`,
       `${match.teamB.name} winrate ${bestMap.map}: ${bestMap.teamBWinrate}%`,
       `Разница winrate: ${diff}%`,
-      `Формат матча: ${match.format}`
+      `Sample size: ${sampleSize} карт`,
+      `Формат матча: ${match.format}`,
+      `Источник: ${bestMap.source}`
     ],
-    factorsAgainst: ["Данные демо", "Нет подтвержденного veto", "Нет live-состава"],
-    source: "Demo",
+    factorsAgainst: [`Не хватает: ${missing.join(", ")}`, "Нет подтвержденного veto", "Нет live map history"],
+    source,
     confidence: strength >= 72 ? "средний" : "низкий",
     details: [
-      row("Winrate на карте", `${bestMap.teamAWinrate}%`, `${bestMap.teamBWinrate}%`, `разница ${diff}%`, "Demo"),
-      row("Сыграно карт", String(bestMap.teamAPlayed), String(bestMap.teamBPlayed), "объем выборки влияет на надежность", "Demo"),
-      row("История встреч на карте", "demo 3-1", "demo 1-3", "пока имитация H2H по карте", "Demo"),
+      row("Winrate на карте", `${bestMap.teamAWinrate}%`, `${bestMap.teamBWinrate}%`, `разница ${diff}%`, source),
+      row("Сыграно карт", String(bestMap.teamAPlayed), String(bestMap.teamBPlayed), `sample size ${sampleSize}`, source),
+      row("Источник данных", bestMap.source, bestMap.source, "manual snapshot, не live API", source),
+      row("Недостающие данные", missing.join(", "), missing.join(", "), "ограничивает качество Map Edge", "Missing"),
       row("Вероятность появления карты", probabilityByFormat(match.format), probabilityByFormat(match.format), "нет реального veto", "Fallback")
     ],
     featureSnapshot: [
-      feature("Map winrate diff", diff, 30, "Demo", diff >= 8 ? "positive" : "neutral", "demo winrate по выбранной карте"),
-      feature("Sample size", `${bestMap.teamAPlayed}/${bestMap.teamBPlayed}`, 15, "Demo", "neutral", "demo количество сыгранных карт"),
+      feature("Map winrate diff", diff, 28, edgeFeatureSource(source), diff >= 8 ? "positive" : "neutral", bestMap.source),
+      feature("Sample size", sampleSize, 22, edgeFeatureSource(source), sampleSize >= 18 ? "positive" : "neutral", `${bestMap.teamAPlayed}/${bestMap.teamBPlayed} сыграно карт`),
       feature("Match format", match.format, 10, "Demo", "neutral", "формат матча"),
-      feature("Side profile", bestMap.sideProfile, 15, "Demo", bestMap.sideProfile === "Balanced" ? "neutral" : "positive", "demo CT/T профиль карты"),
+      feature("Source URL", bestMap.source, 10, edgeFeatureSource(source), "neutral", "provider provenance"),
+      feature("Map pool", bestMap.map, 10, edgeFeatureSource(source), "neutral", "manual snapshot map pool"),
       feature("Veto probability", probabilityByFormat(match.format), 20, "Fallback", "negative", "нет реальной истории veto"),
-      feature("H2H map history", "demo 3-1", 10, "Demo", "neutral", "пока имитация H2H на карте")
+      feature("H2H map history", missing.includes("H2H map history") ? "нет данных" : "частично", 10, missing.includes("H2H map history") ? "Missing" : edgeFeatureSource(source), "neutral", "ограниченный snapshot H2H")
     ],
-    marketName: `${leader} сильнее на ${bestMap.map}`
+    marketName: `${leader} сильнее на ${bestMap.map}`,
+    dataQualityCap: missing.includes("veto") ? 80 : undefined
   });
 }
 
@@ -390,11 +397,12 @@ function createEdge(input: {
   details: EdgeDetail[];
   featureSnapshot: EdgeFeature[];
   marketName?: string;
+  dataQualityCap?: number;
 }): BettingEdge {
   const odds = bestAvailableOdds(input.match.oddsSnapshots);
   const impliedProbability = odds ? Math.round(decimalOddsToImpliedProbability(odds)) : 0;
   const signalStrength = Math.round(input.signalStrength);
-  const dataQualityScore = calculateDataQualityScore(input.featureSnapshot);
+  const dataQualityScore = Math.min(calculateDataQualityScore(input.featureSnapshot), input.dataQualityCap ?? 100);
   const systemProbability = calculateSystemProbability(signalStrength, dataQualityScore, input.source);
   const edgePercent = calculateEdgePercent(systemProbability, impliedProbability);
   const expectedValue = calculateExpectedValue(systemProbability, odds);
@@ -450,7 +458,27 @@ function feature(name: string, value: string | number, weight: number, source: E
 
 function edgeSourceFromFeatureSource(source: EdgeFeatureSource): EdgeSource {
   if (source === "Real") return "Real";
+  if (source === "Partial") return "Partial";
+  if (source === "Snapshot") return "Snapshot";
   if (source === "Demo") return "Demo";
+  if (source === "Missing") return "Missing";
+  return "Fallback";
+}
+
+function mapEdgeSource(map: MapFactor): EdgeSource {
+  if (map.badge === "real") return "Real";
+  if (map.badge === "partial") return "Partial";
+  if (map.badge === "snapshot") return "Snapshot";
+  if (map.badge === "missing" || map.badge === "insufficient") return "Missing";
+  return "Demo";
+}
+
+function edgeFeatureSource(source: EdgeSource): EdgeFeatureSource {
+  if (source === "Real") return "Real";
+  if (source === "Partial") return "Partial";
+  if (source === "Snapshot") return "Snapshot";
+  if (source === "Demo") return "Demo";
+  if (source === "Missing") return "Missing";
   return "Fallback";
 }
 

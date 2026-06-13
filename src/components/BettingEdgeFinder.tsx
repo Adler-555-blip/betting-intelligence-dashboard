@@ -339,12 +339,27 @@ function SourceBadge({ value }: { value: EdgeSource | EdgeFeatureSource }) {
   const className =
     value === "Real"
       ? "border-terminal-green/40 bg-terminal-green/10 text-terminal-green"
+      : value === "Partial"
+        ? "border-terminal-green/30 bg-terminal-green/5 text-terminal-green"
+        : value === "Snapshot"
+          ? "border-sky-400/40 bg-sky-400/10 text-sky-300"
       : value === "Demo"
         ? "border-terminal-yellow/40 bg-terminal-yellow/10 text-terminal-yellow"
         : value === "Fallback"
           ? "border-terminal-red/40 bg-terminal-red/10 text-terminal-red"
           : "border-terminal-red/40 bg-terminal-red/10 text-terminal-red";
-  const label = value === "Real" ? "Реальные данные" : value === "Demo" ? "Демо-данные" : value === "Fallback" ? "Fallback" : "Недостаточно данных";
+  const label =
+    value === "Real"
+      ? "Реальные данные"
+      : value === "Partial"
+        ? "Частичные данные"
+        : value === "Snapshot"
+          ? "Snapshot-данные"
+          : value === "Demo"
+            ? "Демо-данные"
+            : value === "Fallback"
+              ? "Fallback"
+              : "Недостаточно данных";
   return <span className={`inline-flex rounded border px-2 py-1 text-xs font-medium ${className}`}>{label}</span>;
 }
 

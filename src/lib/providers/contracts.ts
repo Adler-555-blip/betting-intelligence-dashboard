@@ -2,10 +2,13 @@ import type {
   DataSourceReference,
   GameDiscipline,
   NormalizedMap,
+  NormalizedMapPool,
+  NormalizedMapResult,
   NormalizedMatch,
   NormalizedOddsSnapshot,
   NormalizedPlayer,
   NormalizedTeam,
+  NormalizedTeamMapStats,
   NormalizedTournament,
   ProviderName,
   ProviderQuality
@@ -57,6 +60,11 @@ export type MapProvider = {
   providerName: ProviderName;
   getTeamMapPool(teamName: string, context?: ProviderContext): Promise<ProviderResult<NormalizedMap[]>>;
   getMatchMaps(matchId: string, context?: ProviderContext): Promise<ProviderResult<NormalizedMap[]>>;
+  listRecentMapsByTeam(teamName: string, context?: ProviderContext): Promise<ProviderResult<NormalizedMapResult[]>>;
+  getTeamMapStats(teamName: string, context?: ProviderContext): Promise<ProviderResult<NormalizedTeamMapStats[]>>;
+  getHeadToHeadMaps(teamAName: string, teamBName: string, context?: ProviderContext): Promise<ProviderResult<NormalizedMapResult[]>>;
+  getTournamentMatchMaps(tournamentName: string, context?: ProviderContext): Promise<ProviderResult<NormalizedMapResult[]>>;
+  getNormalizedMapPool(teamName: string, context?: ProviderContext): Promise<ProviderResult<NormalizedMapPool | null>>;
 };
 
 export type OddsProvider = {

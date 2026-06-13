@@ -1,4 +1,4 @@
-export type EdgeFeatureSource = "Real" | "Demo" | "Fallback" | "Missing";
+export type EdgeFeatureSource = "Real" | "Partial" | "Snapshot" | "Demo" | "Fallback" | "Missing";
 export type EdgeFeatureImpact = "positive" | "negative" | "neutral";
 
 export type EdgeFeature = {
@@ -21,6 +21,8 @@ type QualityInputs = {
 
 const sourceReliability: Record<EdgeFeatureSource, number> = {
   Real: 92,
+  Partial: 72,
+  Snapshot: 64,
   Demo: 38,
   Fallback: 18,
   Missing: 0
@@ -60,6 +62,8 @@ export function featureQuality(feature: EdgeFeature, allFeatures: EdgeFeature[] 
 
 export function sourceLabel(value: EdgeFeatureSource) {
   if (value === "Real") return "Реальные данные";
+  if (value === "Partial") return "Частичные данные";
+  if (value === "Snapshot") return "Snapshot-данные";
   if (value === "Demo") return "Демо-данные";
   if (value === "Fallback") return "Fallback";
   return "Недостаточно данных";
@@ -67,6 +71,8 @@ export function sourceLabel(value: EdgeFeatureSource) {
 
 function freshnessScore(feature: EdgeFeature) {
   if (feature.source === "Real") return 75;
+  if (feature.source === "Partial") return 62;
+  if (feature.source === "Snapshot") return 55;
   if (feature.source === "Demo") return 35;
   if (feature.source === "Fallback") return 20;
   return 0;
@@ -84,6 +90,8 @@ function sampleSizeScore(feature: EdgeFeature) {
     return 20;
   }
   if (feature.source === "Real") return 70;
+  if (feature.source === "Partial") return 58;
+  if (feature.source === "Snapshot") return 50;
   if (feature.source === "Demo") return 35;
   return 15;
 }
@@ -98,6 +106,8 @@ function coverageScore(feature: EdgeFeature, allFeatures: EdgeFeature[]) {
 function provenanceScore(feature: EdgeFeature) {
   if (feature.source === "Real" && feature.note) return 90;
   if (feature.source === "Real") return 75;
+  if (feature.source === "Partial" && feature.note) return 70;
+  if (feature.source === "Snapshot" && feature.note) return 62;
   if (feature.source === "Demo") return 35;
   if (feature.source === "Fallback") return 20;
   return 0;
@@ -107,6 +117,8 @@ function consistencyScore(feature: EdgeFeature) {
   if (feature.source === "Missing") return 0;
   if (feature.impact === "neutral") return 55;
   if (feature.source === "Real") return 80;
+  if (feature.source === "Partial") return 65;
+  if (feature.source === "Snapshot") return 58;
   if (feature.source === "Demo") return 45;
   return 25;
 }

@@ -44,10 +44,13 @@ export type {
   DataSourceReference,
   GameDiscipline,
   NormalizedMap,
+  NormalizedMapPool,
+  NormalizedMapResult,
   NormalizedMatch,
   NormalizedOddsSnapshot,
   NormalizedPlayer,
   NormalizedTeam,
+  NormalizedTeamMapStats,
   NormalizedTournament,
   ProviderName,
   ProviderQuality

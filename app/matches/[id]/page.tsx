@@ -586,12 +586,18 @@ function PlayerKillsSection({ players }: { players: PlayerKillFactor[] }) {
 function DataBadgeView({ value, label, size = "regular" }: { value: DataBadge; label?: string; size?: "regular" | "large" }) {
   const styles: Record<DataBadge, string> = {
     real: "border-terminal-green/40 bg-terminal-green/10 text-terminal-green",
+    partial: "border-terminal-green/30 bg-terminal-green/5 text-terminal-green",
+    snapshot: "border-sky-400/40 bg-sky-400/10 text-sky-300",
     demo: "border-terminal-yellow/40 bg-terminal-yellow/10 text-terminal-yellow",
+    missing: "border-terminal-red/40 bg-terminal-red/10 text-terminal-red",
     insufficient: "border-terminal-red/40 bg-terminal-red/10 text-terminal-red"
   };
   const labels: Record<DataBadge, string> = {
     real: "● Реальные данные",
+    partial: "● Частичные данные",
+    snapshot: "● Snapshot-данные",
     demo: "● Демо-данные",
+    missing: "● Нет данных",
     insufficient: "● Недостаточно данных"
   };
   const sizeClass = size === "large" ? "px-3 py-2 text-sm font-semibold" : "px-2 py-1 text-xs font-medium";

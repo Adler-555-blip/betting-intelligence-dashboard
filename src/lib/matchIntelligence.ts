@@ -1,10 +1,11 @@
 import type { Match, OddsSnapshot, Team } from "@prisma/client";
 import { cs2FoundationSources } from "./cs2RealData";
 import { hltvSnapshotProvider } from "./providers/hltvProvider";
+import { liquipediaSnapshotProvider } from "./providers/liquipediaProvider";
 import { getOpenDotaTeamFactors } from "./providers/opendotaProvider";
-import type { NormalizedPlayer, NormalizedTeam } from "./providers/normalized";
+import type { NormalizedPlayer, NormalizedTeam, NormalizedTeamMapStats } from "./providers/normalized";
 
-export type DataBadge = "real" | "demo" | "insufficient";
+export type DataBadge = "real" | "partial" | "snapshot" | "demo" | "missing" | "insufficient";
 
 export type TeamFormFactor = {
   teamName: string;
@@ -39,6 +40,8 @@ export type MapFactor = {
   advantage: "teamA" | "teamB" | "even";
   source: string;
   badge: DataBadge;
+  sampleSize?: number;
+  missing?: string[];
 };
 
 export type TeamRatingFactor = {
@@ -242,7 +245,7 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
 
   const teamA = teamAReal ?? fallbackForm(match.teamA.name, match.importanceScore, "A", "Демо-данные");
   const teamB = teamBReal ?? fallbackForm(match.teamB.name, match.importanceScore, "B", "Демо-данные");
-  const maps = match.game === "cs2" ? fallbackMaps(match.teamA.name, match.teamB.name) : [];
+  const maps = match.game === "cs2" ? await providerCs2Maps(match.teamA.name, match.teamB.name) : [];
   const teamRatings = match.game === "cs2" ? await realCs2TeamRatings(match.teamA.name, match.teamB.name) : [];
   const footballContext = match.game === "football" ? fallbackFootballContext(match) : undefined;
   const h2h = fallbackH2H(match.teamA.name, match.teamB.name, match.game);
@@ -292,7 +295,6 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
       demo: [
         teamA.badge === "demo" ? `Форма ${teamA.teamName}` : "",
         teamB.badge === "demo" ? `Форма ${teamB.teamName}` : "",
-        match.game === "cs2" ? "Статистика карт" : "",
         match.game === "dota2" ? "Контекст патча" : "",
         match.game === "cs2" ? "Киллы игроков" : "",
         match.game === "cs2" ? "CT/T стороны" : "",
@@ -308,10 +310,55 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
         ? ["Нет подтвержденных составов и травм", "Нет реальных новостей по сборным", "Нет реальных market signals"]
         : [
             teamARoster.length && teamBRoster.length ? "" : "Недостаточно данных по составу одной из команд",
+            match.game === "cs2" && maps.some((map) => map.badge === "snapshot" || map.badge === "partial") ? "Map Edge: Snapshot/Partial, нет veto и live map history" : "",
             h2h.length === 0 ? "Очные встречи: нет real provider data, fake demo H2H отключен" : ""
           ].filter(Boolean)
     }
   };
+}
+
+async function providerCs2Maps(teamA: string, teamB: string): Promise<MapFactor[]> {
+  const [teamAStats, teamBStats, h2hMaps] = await Promise.all([
+    liquipediaSnapshotProvider.getTeamMapStats?.(teamA, { game: "cs2" }),
+    liquipediaSnapshotProvider.getTeamMapStats?.(teamB, { game: "cs2" }),
+    liquipediaSnapshotProvider.getHeadToHeadMaps?.(teamA, teamB, { game: "cs2" })
+  ]);
+  const maps = buildProviderMapFactors(teamAStats?.data ?? [], teamBStats?.data ?? [], h2hMaps?.data.length ?? 0);
+  return maps.length ? maps : fallbackMaps(teamA, teamB);
+}
+
+function buildProviderMapFactors(teamAStats: NormalizedTeamMapStats[], teamBStats: NormalizedTeamMapStats[], h2hSampleSize: number): MapFactor[] {
+  const mapNames = new Set([...teamAStats.map((item) => item.mapName), ...teamBStats.map((item) => item.mapName)]);
+  return [...mapNames].map((mapName) => {
+    const teamA = teamAStats.find((item) => item.mapName === mapName);
+    const teamB = teamBStats.find((item) => item.mapName === mapName);
+    const teamAWinrate = teamA?.winrate ?? 0;
+    const teamBWinrate = teamB?.winrate ?? 0;
+    const teamAPlayed = teamA?.mapsPlayed ?? 0;
+    const teamBPlayed = teamB?.mapsPlayed ?? 0;
+    const sampleSize = teamAPlayed + teamBPlayed;
+    const badge: DataBadge = sampleSize >= 18 && teamA && teamB ? "partial" : "snapshot";
+    const missing = ["veto", "CT/T", "live recent maps"].concat(h2hSampleSize ? [] : ["H2H map history"]);
+
+    return {
+      map: mapName,
+      teamAPlayed,
+      teamAWinrate,
+      teamACTWinrate: 0,
+      teamATWinrate: 0,
+      teamBPlayed,
+      teamBWinrate,
+      teamBCTWinrate: 0,
+      teamBTWinrate: 0,
+      strongerSide: "Balanced",
+      sideProfile: "Balanced",
+      advantage: Math.abs(teamAWinrate - teamBWinrate) < 5 ? "even" : teamAWinrate > teamBWinrate ? "teamA" : "teamB",
+      source: `Liquipedia Snapshot Provider: ${cs2FoundationSources.event}`,
+      badge,
+      sampleSize,
+      missing
+    };
+  });
 }
 
 async function safeOpenDota(teamName: string) {
