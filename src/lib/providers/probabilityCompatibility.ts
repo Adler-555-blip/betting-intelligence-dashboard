@@ -1,6 +1,6 @@
 import type { EdgeFeature, EdgeFeatureSource } from "../dataQuality";
 import { calculateDataQualityScore } from "../dataQuality";
-import type { NormalizedMap, NormalizedMatch, NormalizedPlayer, NormalizedTeam, ProviderQuality } from "./normalized";
+import type { NormalizedMap, NormalizedMatch, NormalizedPlayer, NormalizedTeam, NormalizedTournament, ProviderQuality } from "./normalized";
 
 export type ProviderFeatureSnapshot = {
   features: EdgeFeature[];
@@ -60,6 +60,18 @@ export function buildMatchFeatureSnapshot(match: NormalizedMatch | null): Provid
   ];
 
   return snapshot(features, match ? [] : ["match"]);
+}
+
+export function buildTournamentFeatureSnapshot(tournament: NormalizedTournament | null): ProviderFeatureSnapshot {
+  const features: EdgeFeature[] = [
+    feature("Tournament", tournament?.name ?? "нет данных", 25, tournament ? sourceFromQuality(tournament.quality) : "Missing", tournament ? "neutral" : "negative"),
+    feature("Tournament tier", tournament?.tier ?? "нет данных", 15, tournament ? sourceFromQuality(tournament.quality) : "Missing", "neutral"),
+    feature("Provider reliability", tournament?.quality.reliabilityScore ?? "нет данных", 25, tournament ? sourceFromQuality(tournament.quality) : "Missing", "neutral"),
+    feature("Provider coverage", tournament?.quality.coverage ?? "нет данных", 20, tournament ? sourceFromQuality(tournament.quality) : "Missing", "neutral"),
+    feature("Freshness", tournament?.quality.freshness ?? "нет данных", 15, tournament ? sourceFromQuality(tournament.quality) : "Missing", "neutral")
+  ];
+
+  return snapshot(features, tournament ? [] : ["tournament context"]);
 }
 
 export function sourceFromQuality(quality: ProviderQuality): EdgeFeatureSource {

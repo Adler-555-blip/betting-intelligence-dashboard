@@ -26,7 +26,7 @@ export const liquipediaSnapshotProvider: ProviderBundle = {
   listTournaments: async (context?: ProviderContext) => result(filterByGame([normalizeTournament()], context)),
   getTournamentContext: async (name: string, context?: ProviderContext) => {
     const tournaments = filterByGame([normalizeTournament()], context);
-    return result(tournaments.find((tournament) => normalize(tournament.name).includes(normalize(name))) ?? null);
+    return result(tournaments.find((tournament) => matchesName(tournament.name, name)) ?? null);
   },
   listMatches: async (context?: ProviderContext) => result(filterByGame(realCs2Matches.map(normalizeMatch), context)),
   getMatch: async (matchId: string, context?: ProviderContext) => {
@@ -98,4 +98,10 @@ function filterByGame<T extends { game: string }>(items: T[], context?: Provider
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function matchesName(sourceName: string, targetName: string) {
+  const source = normalize(sourceName);
+  const target = normalize(targetName);
+  return source.includes(target) || target.includes(source);
 }

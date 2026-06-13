@@ -8,6 +8,8 @@ import {
   normalizeScoreToProbability,
   round1
 } from "./probabilityCore";
+import { liquipediaSnapshotProvider } from "./providers/liquipediaProvider";
+import { buildTournamentFeatureSnapshot, sourceFromQuality } from "./providers/probabilityCompatibility";
 
 export type EdgeType = "Map Edge" | "Player Edge" | "CT/T Edge" | "Tournament Edge" | "Line Movement Edge";
 export type EdgeSource = "Real" | "Demo" | "Fallback";
@@ -66,12 +68,13 @@ type MatchForEdges = Match & {
   oddsSnapshots: (OddsSnapshot & { bookmaker: Bookmaker })[];
 };
 
-export function findBettingEdges(match: MatchForEdges, intelligence: MatchIntelligence): BettingEdge[] {
+export async function findBettingEdges(match: MatchForEdges, intelligence: MatchIntelligence): Promise<BettingEdge[]> {
+  const tournamentEdge = await buildTournamentEdge(match, intelligence);
   return [
     buildMapEdge(match, intelligence),
     buildPlayerEdge(match, intelligence),
     buildCtTEdge(match, intelligence),
-    buildTournamentEdge(match, intelligence),
+    tournamentEdge,
     buildLineMovementEdge(match, intelligence)
   ].sort((a, b) => b.signalStrength - a.signalStrength);
 }
@@ -280,12 +283,29 @@ function buildCtTEdge(match: MatchForEdges, intelligence: MatchIntelligence): Be
   });
 }
 
-function buildTournamentEdge(match: MatchForEdges, intelligence: MatchIntelligence): BettingEdge {
+async function buildTournamentEdge(match: MatchForEdges, intelligence: MatchIntelligence): Promise<BettingEdge> {
+  const providerTournamentResult = match.game === "cs2"
+    ? await liquipediaSnapshotProvider.getTournamentContext?.(match.tournament.name, { game: "cs2" })
+    : null;
+  const providerContext = providerTournamentResult?.data ?? null;
+  const providerFeatureSnapshot = buildTournamentFeatureSnapshot(providerContext);
+  const providerFeatureSource = providerContext ? sourceFromQuality(providerContext.quality) : "Missing";
+  const providerEdgeSource = edgeSourceFromFeatureSource(providerFeatureSource);
   const stage = match.format.toLowerCase().includes("group") ? "group" : match.format;
   const formatWeight = match.format === "BO5" ? 14 : match.format === "BO3" ? 10 : match.format === "BO1" ? 4 : 8;
   const importanceWeight = Math.round(match.importanceScore / 10);
-  const strength = clamp(42 + formatWeight + importanceWeight + (match.status === "prematch" ? 4 : 0));
+  const strength = clamp(42 + formatWeight + importanceWeight + (match.status === "prematch" ? 4 : 0) + (providerContext ? 5 : 0));
   const realFootballContext = match.game === "football" && intelligence.footballContext?.badge === "real";
+  const realTournamentContext = Boolean(providerContext || realFootballContext);
+  const tournamentEdgeSource: EdgeSource = providerContext ? providerEdgeSource : realFootballContext ? "Real" : "Demo";
+  const providerLabel = providerContext?.source.providerName ?? "Demo";
+  const providerQuality = providerContext?.quality.reliabilityScore ?? null;
+  const sourceUrl = providerContext?.source.sourceUrl ?? null;
+  const tournamentFeatures: EdgeFeature[] = [
+    ...providerFeatureSnapshot.features,
+    feature("Stage", stage, 15, realTournamentContext ? "Real" : "Demo", "neutral", providerContext ? "provider tournament context" : "нет provider match context"),
+    feature("Live news", "нет данных", 10, "Missing", "negative")
+  ];
 
   return createEdge({
     match,
@@ -298,24 +318,21 @@ function buildTournamentEdge(match: MatchForEdges, intelligence: MatchIntelligen
       `Турнир: ${match.tournament.name}`,
       `Формат: ${match.format}`,
       `Важность: ${match.importanceScore}/100`,
-      `Стадия/контекст: ${stage}`
+      `Стадия/контекст: ${stage}`,
+      realTournamentContext ? `Provider: ${providerLabel}` : "Provider context не найден"
     ],
-    factorsAgainst: ["Нет реальной турнирной мотивации по всем дисциплинам", "Нет live-новостей", "Часть данных demo/fallback"],
-    source: realFootballContext ? "Real" : "Demo",
-    confidence: realFootballContext ? "средний" : "низкий",
+    factorsAgainst: ["Нет реальной турнирной мотивации по всем дисциплинам", "Нет live-новостей", realTournamentContext ? "Нет live-синхронизации provider snapshot" : "Часть данных demo/fallback"],
+    source: tournamentEdgeSource,
+    confidence: realTournamentContext ? "средний" : "низкий",
     details: [
-      row("Стадия турнира", stage, stage, "контекст мотивации", realFootballContext ? "Real" : "Demo"),
+      row("Источник турнира", providerLabel, providerLabel, sourceUrl ?? "snapshot без live API", realTournamentContext ? "Real" : "Demo"),
+      row("Provider quality", providerQuality ? `${providerQuality}/100` : "нет данных", providerQuality ? `${providerQuality}/100` : "нет данных", "качество источника", realTournamentContext ? "Real" : "Demo"),
+      row("Стадия турнира", stage, stage, "контекст мотивации", realTournamentContext ? "Real" : "Demo"),
       row("Формат", match.format, match.format, "BO1/BO3/BO5 меняет дисперсию", "Demo"),
-      row("Надежность статистики", reliabilityLabel(match, intelligence), reliabilityLabel(match, intelligence), "больше real-данных — выше доверие", realFootballContext ? "Real" : "Demo"),
+      row("Надежность статистики", reliabilityLabel(match, intelligence), reliabilityLabel(match, intelligence), "больше real-данных — выше доверие", realTournamentContext ? "Real" : "Demo"),
       row("Важность", `${match.importanceScore}/100`, `${match.importanceScore}/100`, "приоритет проверки матча", "Demo")
     ],
-    featureSnapshot: [
-      feature("Tournament", match.tournament.name, 20, realFootballContext ? "Real" : "Demo", "neutral", realFootballContext ? "ручной real context" : "demo context"),
-      feature("Match format", match.format, 20, "Demo", "neutral"),
-      feature("Importance score", match.importanceScore, 20, "Demo", match.importanceScore >= 70 ? "positive" : "neutral"),
-      feature("Stage", stage, 20, realFootballContext ? "Real" : "Demo", "neutral"),
-      feature("Live news", "нет данных", 20, "Missing", "negative")
-    ],
+    featureSnapshot: tournamentFeatures,
     marketName: `Контекст ${match.tournament.name}`
   });
 }
@@ -429,6 +446,12 @@ function row(factor: string, teamA: string, teamB: string, impact: string, sourc
 
 function feature(name: string, value: string | number, weight: number, source: EdgeFeatureSource, impact: EdgeFeature["impact"], note?: string): EdgeFeature {
   return { name, value, weight, source, impact, note };
+}
+
+function edgeSourceFromFeatureSource(source: EdgeFeatureSource): EdgeSource {
+  if (source === "Real") return "Real";
+  if (source === "Demo") return "Demo";
+  return "Fallback";
 }
 
 function strongestMap(maps: MapFactor[]) {

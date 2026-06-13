@@ -1,6 +1,8 @@
 import type { Match, OddsSnapshot, Team } from "@prisma/client";
-import { cs2FoundationSources, getRealCs2Roster, getRealCs2Team } from "./cs2RealData";
+import { cs2FoundationSources } from "./cs2RealData";
+import { hltvSnapshotProvider } from "./providers/hltvProvider";
 import { getOpenDotaTeamFactors } from "./providers/opendotaProvider";
+import type { NormalizedPlayer, NormalizedTeam } from "./providers/normalized";
 
 export type DataBadge = "real" | "demo" | "insufficient";
 
@@ -241,11 +243,12 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
   const teamA = teamAReal ?? fallbackForm(match.teamA.name, match.importanceScore, "A", "Демо-данные");
   const teamB = teamBReal ?? fallbackForm(match.teamB.name, match.importanceScore, "B", "Демо-данные");
   const maps = match.game === "cs2" ? fallbackMaps(match.teamA.name, match.teamB.name) : [];
-  const teamRatings = match.game === "cs2" ? realCs2TeamRatings(match.teamA.name, match.teamB.name) : [];
+  const teamRatings = match.game === "cs2" ? await realCs2TeamRatings(match.teamA.name, match.teamB.name) : [];
   const footballContext = match.game === "football" ? fallbackFootballContext(match) : undefined;
   const h2h = fallbackH2H(match.teamA.name, match.teamB.name, match.game);
-  const teamARoster = match.game === "cs2" ? getRealCs2Roster(match.teamA.name) : rosterFallback[match.teamA.name] ?? [];
-  const teamBRoster = match.game === "cs2" ? getRealCs2Roster(match.teamB.name) : rosterFallback[match.teamB.name] ?? [];
+  const [teamARoster, teamBRoster] = match.game === "cs2"
+    ? await Promise.all([providerCs2Roster(match.teamA.name), providerCs2Roster(match.teamB.name)])
+    : [rosterFallback[match.teamA.name] ?? [], rosterFallback[match.teamB.name] ?? []];
   const playerKills = match.game === "cs2" ? fallbackPlayerKills(match.teamA.name, teamARoster).concat(fallbackPlayerKills(match.teamB.name, teamBRoster)) : [];
   const factorsFor = match.game === "football" && footballContext
     ? buildFootballPositiveFactors(match.teamA.name, match.teamB.name, footballContext)
@@ -281,10 +284,9 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
       real: [
         teamA.badge === "real" ? `Форма ${teamA.teamName}: OpenDota` : "",
         teamB.badge === "real" ? `Форма ${teamB.teamName}: OpenDota` : "",
-        match.game === "cs2" ? `Матчи CS2: HLTV match center (${cs2FoundationSources.matches})` : "",
-        match.game === "cs2" ? `Турнир CS2: IEM Cologne Major 2026 / Liquipedia (${cs2FoundationSources.event})` : "",
-        match.game === "cs2" ? `Рейтинг команд: HLTV Ranking snapshot (${cs2FoundationSources.ranking})` : "",
-        match.game === "cs2" ? "Составы CS2: HLTV team pages, сохранены в real foundation snapshot" : "",
+        match.game === "cs2" ? `HLTV ranking snapshot: ${cs2FoundationSources.ranking}` : "",
+        match.game === "cs2" ? `CS2 rosters: HLTV Snapshot Provider (${cs2FoundationSources.matches})` : "",
+        match.game === "cs2" ? `Tournament context: Liquipedia Snapshot Provider (${cs2FoundationSources.event})` : "",
         match.game === "football" && footballContext?.badge === "real" ? "Турнирный контекст FIFA World Cup 2026" : ""
       ].filter(Boolean),
       demo: [
@@ -294,16 +296,20 @@ export async function getMatchIntelligence(match: MatchWithTeams): Promise<Match
         match.game === "dota2" ? "Контекст патча" : "",
         match.game === "cs2" ? "Киллы игроков" : "",
         match.game === "cs2" ? "CT/T стороны" : "",
+        match.game === "cs2" ? "Коэффициенты и движение линии" : "",
         match.game === "football" ? "Рейтинг сборных" : "",
         match.game === "football" ? "Форма сборных" : "",
         match.game === "football" ? "Коэффициенты 1X2" : "",
         match.game === "football" ? "Календарь и логистика" : "",
         match.game === "football" && footballContext?.badge === "demo" ? "Демо-пара внутри окна FIFA World Cup 2026" : "",
-        match.game === "cs2" ? "Очные встречи и veto" : "Очные встречи"
+        match.game === "cs2" ? "Veto" : ""
       ].filter(Boolean),
       insufficient: match.game === "football"
         ? ["Нет подтвержденных составов и травм", "Нет реальных новостей по сборным", "Нет реальных market signals"]
-        : teamARoster.length && teamBRoster.length ? [] : ["Недостаточно данных по составу одной из команд"]
+        : [
+            teamARoster.length && teamBRoster.length ? "" : "Недостаточно данных по составу одной из команд",
+            h2h.length === 0 ? "Очные встречи: нет real provider data, fake demo H2H отключен" : ""
+          ].filter(Boolean)
     }
   };
 }
@@ -390,29 +396,45 @@ function fallbackTeamRatings(teamA: string, teamB: string): TeamRatingFactor[] {
   ];
 }
 
-function realCs2TeamRatings(teamA: string, teamB: string): TeamRatingFactor[] {
-  const realA = getRealCs2Team(teamA);
-  const realB = getRealCs2Team(teamB);
-  const ratingA = realA?.points ? Number((realA.points / 1000).toFixed(2)) : ratingSeed(teamA);
-  const ratingB = realB?.points ? Number((realB.points / 1000).toFixed(2)) : ratingSeed(teamB);
+async function realCs2TeamRatings(teamA: string, teamB: string): Promise<TeamRatingFactor[]> {
+  const [teamAResult, teamBResult] = await Promise.all([
+    hltvSnapshotProvider.findTeam?.(teamA, { game: "cs2" }),
+    hltvSnapshotProvider.findTeam?.(teamB, { game: "cs2" })
+  ]);
+  const realA = teamAResult?.data ?? null;
+  const realB = teamBResult?.data ?? null;
+  const ratingA = realA?.ranking?.points ? Number((realA.ranking.points / 1000).toFixed(2)) : ratingSeed(teamA);
+  const ratingB = realB?.ranking?.points ? Number((realB.ranking.points / 1000).toFixed(2)) : ratingSeed(teamB);
   return [
     buildRealCs2Rating(teamA, ratingA, ratingB, realA),
     buildRealCs2Rating(teamB, ratingB, ratingA, realB)
   ];
 }
 
-function buildRealCs2Rating(teamName: string, rating: number, opponentRating: number, realTeam: ReturnType<typeof getRealCs2Team>): TeamRatingFactor {
-  const hasRanking = Boolean(realTeam?.rank && realTeam.points);
+function buildRealCs2Rating(teamName: string, rating: number, opponentRating: number, realTeam: NormalizedTeam | null): TeamRatingFactor {
+  const hasRanking = Boolean(realTeam?.ranking?.rank && realTeam.ranking.points);
   return {
     teamName,
     rating,
-    rank: realTeam?.rank ?? Math.max(1, Math.round(24 - rating * 9)),
+    rank: realTeam?.ranking?.rank ?? Math.max(1, Math.round(24 - rating * 9)),
     ratingDiff: Number((rating - opponentRating).toFixed(2)),
-    trend: hasRanking ? `HLTV #${realTeam?.rank}, ${realTeam?.points} points` : "нет в HLTV top snapshot, используется fallback",
+    trend: hasRanking ? `HLTV #${realTeam?.ranking?.rank}, ${realTeam?.ranking?.points} points` : "нет в HLTV top snapshot, используется fallback",
     source: hasRanking
-      ? `HLTV Ranking 2026-06-01: ${cs2FoundationSources.ranking}`
-      : `HLTV team page без top-rank snapshot: ${realTeam?.sources.team ?? "нет источника"}`,
+      ? `${realTeam?.source.providerName}: ${realTeam?.source.sourceUrl ?? cs2FoundationSources.ranking}`
+      : `${realTeam?.source.providerName ?? "HLTV Snapshot"} без top-rank snapshot: ${realTeam?.source.sourceUrl ?? "нет источника"}`,
     badge: hasRanking ? "real" : "insufficient"
+  };
+}
+
+async function providerCs2Roster(teamName: string): Promise<PlayerInfo[]> {
+  const result = await hltvSnapshotProvider.listPlayersByTeam?.(teamName, { game: "cs2" });
+  return (result?.data ?? []).map(playerFromProvider);
+}
+
+function playerFromProvider(player: NormalizedPlayer): PlayerInfo {
+  return {
+    nickname: player.nickname,
+    role: player.role ?? "player"
   };
 }
 
@@ -532,17 +554,8 @@ function fallbackPlayerKills(teamName: string, roster: PlayerInfo[]): PlayerKill
   });
 }
 
-function fallbackH2H(teamA: string, teamB: string, game: string): H2HFactor[] {
-  return [0, 1, 2].map((index) => {
-    const winner = index === 1 ? teamB : teamA;
-    return {
-      date: new Date(Date.now() - (index + 3) * 14 * 24 * 60 * 60 * 1000).toISOString(),
-      score: game === "cs2" ? (winner === teamA ? "2:1" : "1:2") : winner === teamA ? "2:0" : "1:2",
-      winner,
-      source: "Демо-данные очных встреч",
-      badge: "demo"
-    };
-  });
+function fallbackH2H(_teamA: string, _teamB: string, _game: string): H2HFactor[] {
+  return [];
 }
 
 function buildPositiveFactors(teamA: TeamFormFactor, teamB: TeamFormFactor, maps: MapFactor[], h2h: H2HFactor[], teamAName: string, teamBName: string) {

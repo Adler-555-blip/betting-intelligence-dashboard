@@ -23,7 +23,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
   const series = chartSeries(match.oddsSnapshots);
   const matchOptions = journalData.matches.map((item) => ({ id: item.id, label: `${item.teamA.name} против ${item.teamB.name}` }));
   const intelligence = await getMatchIntelligence(match);
-  const edges = findBettingEdges(match, intelligence);
+  const edges = await findBettingEdges(match, intelligence);
   const summary = buildMatchSummary(match.teamA.name, match.teamB.name, intelligence);
   const leadingTeam = intelligence.score.teamA === intelligence.score.teamB
     ? "Преимущество не выражено"
